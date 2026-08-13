@@ -1,10 +1,6 @@
 ﻿# kras-quick Release Publisher & Installer
 
-개인 GitHub 저장소 `HaYanJongSeong/kras-quick`의 비공개 릴리스 배포/설치 스크립트 모음.
-EXE는 Git에 절대 커밋하지 않고, GitHub Release 자산으로만 배포한다.
-
 ## 구조
-
 ```
 kras-quick-release/
 ├── .gitignore                      # *.exe / *.sha256 제외
@@ -76,8 +72,3 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests\test-installer.ps1
 - 설치 전 임시 파일은 `finally`에서 정리.
 - 배포 시 `gh release create` 실패/자산 누락을 `$LASTEXITCODE`와 `gh release view`로 검증.
 
-## 주의사항
-
-- gh CLI 필요: https://cli.github.com/ (설치 시 `gh auth login`).
-- 기존 EXE가 `Downloads\kras_quick_v0.2.1.exe`(버전명)이면, 설치기는 고정 이름 `kras-quick.exe`로 새로 설치한다. 이전 버전 EXE는 남겨두므로 원하면 수동 삭제.
-- 이 스크립트는 Git 초기화/커밋/푸시, 릴리스 생성, 업로드를 스스로 하지 않는다. 배포는 반드시 배포기를 실행할 때만.
