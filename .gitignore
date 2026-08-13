@@ -1,0 +1,4 @@
+﻿# Never commit binaries, checksums, or install temp files.
+*.exe
+*.exe.sha256
+*.tmp
