@@ -1,13 +1,13 @@
 ﻿# KRAS-QUICK
 ## 📦 설치 (한 줄)
 
-git·gh 없이 PowerShell 하나로 설치하고 실행합니다.
+PowerShell에서 아래 명령 하나로 설치하고 실행합니다. git·gh 불필요.
 
 ```powershell
-$u='https://github.com/HaYanJongSeong/kras-quick/releases/download/v0.2.1/kras_quick_v0.2.1.exe';$d="$env:USERPROFILE\Downloads";Invoke-WebRequest $u -OutFile "$d\kras_quick_v0.2.1.exe";Invoke-WebRequest "$u.sha256" -OutFile "$d\kras_quick_v0.2.1.exe.sha256";$h=((Get-Content "$d\kras_quick_v0.2.1.exe.sha256" -Raw) -split '\s+')[0];$a=(Get-FileHash "$d\kras_quick_v0.2.1.exe" -Algorithm SHA256).Hash;if($h -ne $a){throw 'SHA-256 mismatch'};$t="$d\kras-quick.exe.$([guid]::NewGuid().ToString('N')).tmp";Copy-Item "$d\kras_quick_v0.2.1.exe" $t;Move-Item $t "$d\kras-quick.exe" -Force;Start-Process "$d\kras-quick.exe"
+irm https://raw.githubusercontent.com/HaYanJongSeong/kras-quick/main/install.ps1 | iex
 ```
 
-> `kras_quick_v0.2.1.exe.sha256` 해시와 일치해야 설치되며, 기존 `kras-quick.exe`만 원자적으로 교체됩니다.
+> GitHub Releases에서 `kras_quick_v0.2.1.exe`를 받아 SHA-256 검증 후 `Downloads\kras-quick.exe`로 원자적으로 교체하고 실행합니다. 설치 스크립트 원문: [`install.ps1`](install.ps1)
 
 ## ⚠️ 요구사항
 
