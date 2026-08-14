@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     kras-quick one-line installer. Downloads from GitHub Releases, verifies SHA-256, installs atomically, and runs.
     Run: irm https://raw.githubusercontent.com/HaYanJongSeong/kras-quick/main/install.ps1 | iex
@@ -16,13 +16,13 @@ Write-Host ''
 Write-Host "${CYAN}${BOLD}  ╭──────────────────────────────────────╮${RST}"
 Write-Host "${CYAN}${BOLD}  │   KRAS-QUICK  ·  ONE-LINE INSTALLER   │${RST}"
 Write-Host "${CYAN}${BOLD}  ╰──────────────────────────────────────╯${RST}"
-Write-Host "${DIM}  version v0.2.2 · github.com/HaYanJongSeong/kras-quick${RST}"
+Write-Host "${DIM}  version v1.0.0 · github.com/HaYanJongSeong/kras-quick${RST}"
 Write-Host ''
 
-$u = 'https://github.com/HaYanJongSeong/kras-quick/releases/download/v0.2.2/kras_quick_v0.2.2.exe'
+$u = 'https://github.com/HaYanJongSeong/kras-quick/releases/download/v1.0.0/kras_quick_v1.0.0.exe'
 $d = "$env:USERPROFILE\Downloads"
-$exe = "$d\kras_quick_v0.2.2.exe"
-$sum = "$d\kras_quick_v0.2.2.exe.sha256"
+$exe = "$d\kras_quick_v1.0.0.exe"
+$sum = "$d\kras_quick_v1.0.0.exe.sha256"
 
 step "Downloading kras-quick (~136 MB) ..."
 Invoke-WebRequest $u -OutFile $exe
