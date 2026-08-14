@@ -16,10 +16,10 @@ Write-Host ''
 Write-Host "${CYAN}${BOLD}  ╭──────────────────────────────────────╮${RST}"
 Write-Host "${CYAN}${BOLD}  │   KRAS-QUICK  ·  ONE-LINE INSTALLER   │${RST}"
 Write-Host "${CYAN}${BOLD}  ╰──────────────────────────────────────╯${RST}"
-Write-Host "${DIM}  version v1.0.1 · github.com/HaYanJongSeong/kras-quick${RST}"
+Write-Host "${DIM}  version v1.0.2 · github.com/HaYanJongSeong/kras-quick${RST}"
 Write-Host ''
 
-$u = 'https://github.com/HaYanJongSeong/kras-quick/releases/download/v1.0.1/kras_quick_v1.0.1.exe'
+$u = 'https://github.com/HaYanJongSeong/kras-quick/releases/download/v1.0.2/kras_quick_v1.0.2.exe'
 $d = "$env:USERPROFILE\Downloads"
 $tmp = "$d\.kras-quick.$([guid]::NewGuid().ToString('N')).tmp"
 $exe = "$tmp.exe"
