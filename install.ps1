@@ -16,37 +16,38 @@ Write-Host ''
 Write-Host "${CYAN}${BOLD}  ╭──────────────────────────────────────╮${RST}"
 Write-Host "${CYAN}${BOLD}  │   KRAS-QUICK  ·  ONE-LINE INSTALLER   │${RST}"
 Write-Host "${CYAN}${BOLD}  ╰──────────────────────────────────────╯${RST}"
-Write-Host "${DIM}  version v1.0.0 · github.com/HaYanJongSeong/kras-quick${RST}"
+Write-Host "${DIM}  version v1.0.1 · github.com/HaYanJongSeong/kras-quick${RST}"
 Write-Host ''
 
-$u = 'https://github.com/HaYanJongSeong/kras-quick/releases/download/v1.0.0/kras_quick_v1.0.0.exe'
+$u = 'https://github.com/HaYanJongSeong/kras-quick/releases/download/v1.0.1/kras_quick_v1.0.1.exe'
 $d = "$env:USERPROFILE\Downloads"
 $tmp = "$d\.kras-quick.$([guid]::NewGuid().ToString('N')).tmp"
 $exe = "$tmp.exe"
 $sum = "$tmp.sha256"
+try {
+    step "Downloading kras-quick (~136 MB) ..."
+    Invoke-WebRequest $u -OutFile $exe
+    ok 'Downloaded'
 
-step "Downloading kras-quick (~136 MB) ..."
-Invoke-WebRequest $u -OutFile $exe
-ok 'Downloaded'
+    step "Downloading SHA-256 checksum ..."
+    Invoke-WebRequest "$u.sha256" -OutFile $sum
+    ok 'Checksum fetched'
 
-step "Downloading SHA-256 checksum ..."
-Invoke-WebRequest "$u.sha256" -OutFile $sum
-ok 'Checksum fetched'
+    step 'Verifying SHA-256 ...'
+    $h = ((Get-Content $sum -Raw) -split '\s+')[0]
+    $a = (Get-FileHash $exe -Algorithm SHA256).Hash
+    if ($h -ne $a) {
+        Write-Host "${RED}${BOLD}  ✗ SHA-256 MISMATCH${RST}${RED} — download corrupted, aborting.${RST}"
+        throw 'SHA-256 mismatch'
+    }
+    ok 'Checksum verified'
 
-step 'Verifying SHA-256 ...'
-$h = ((Get-Content $sum -Raw) -split '\s+')[0]
-$a = (Get-FileHash $exe -Algorithm SHA256).Hash
-if ($h -ne $a) {
+    step 'Installing ...'
+    Move-Item $exe "$d\kras-quick.exe" -Force
+    done 'Installed to Downloads\kras-quick.exe'
+} finally {
     Remove-Item $exe, $sum -Force -ErrorAction SilentlyContinue
-    Write-Host "${RED}${BOLD}  ✗ SHA-256 MISMATCH${RST}${RED} — download corrupted, aborting.${RST}"
-    throw 'SHA-256 mismatch'
 }
-ok 'Checksum verified'
-
-step 'Installing ...'
-Move-Item $exe "$d\kras-quick.exe" -Force
-Remove-Item $sum -Force -ErrorAction SilentlyContinue
-done 'Installed to Downloads\kras-quick.exe'
 
 Write-Host ''
 Write-Host "${GRN}${BOLD}  ✔ KRAS-QUICK READY${RST}"
