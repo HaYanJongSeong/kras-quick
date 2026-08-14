@@ -5,12 +5,12 @@ import { homedir } from "node:os"
 import { join } from "node:path"
 import { spawn } from "node:child_process"
 
-const VERSION = "1.0.5"
-const SHA256 = "F56BC2452A5BF23A68FB7585C475E53528011E07A46A057A1D0B0A99CEBF7AE6"
+const VERSION = "1.0.6"
+const SHA256 = "A208FDD67CB4458A1DF04AC0674F7285E673EAA7B72394DB2F7EC7B5A219B853"
 const URL = `https://github.com/HaYanJongSeong/kras-quick/releases/download/v${VERSION}/kras_quick_v${VERSION}.exe`
 
-function cacheDir() {
-  return join(process.env.LOCALAPPDATA ?? join(homedir(), "AppData", "Local"), "kras-quick", "npm")
+function launcherDir() {
+  return join(homedir(), "Downloads")
 }
 
 async function sha256File(path) {
@@ -30,8 +30,8 @@ async function sha256File(path) {
 }
 
 async function ensureExe() {
-  const dir = cacheDir()
-  const exe = join(dir, `kras_quick_v${VERSION}.exe`)
+  const dir = launcherDir()
+  const exe = join(dir, "kras-quick.exe")
   await mkdir(dir, { recursive: true })
   if (await sha256File(exe).catch(() => "") === SHA256) return exe
 
