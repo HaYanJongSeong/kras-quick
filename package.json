@@ -1,0 +1,19 @@
+{
+  "name": "@hayanjongseong/kras-quick",
+  "version": "1.0.3",
+  "description": "KRAS Quick launcher for Windows",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "kras-quick": "./bin/kras-quick.js"
+  },
+  "files": [
+    "bin"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
