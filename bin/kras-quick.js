@@ -1,11 +1,12 @@
+#!/usr/bin/env node
 import { createHash } from "node:crypto"
 import { mkdir, open, rename, rm } from "node:fs/promises"
 import { homedir } from "node:os"
 import { join } from "node:path"
 import { spawn } from "node:child_process"
 
-const VERSION = "1.0.3"
-const SHA256 = "37386BC7CA2DBD0AF758884CAD7419FC00233D2016C083A67B60FE750DEB7D09"
+const VERSION = "1.0.5"
+const SHA256 = "F56BC2452A5BF23A68FB7585C475E53528011E07A46A057A1D0B0A99CEBF7AE6"
 const URL = `https://github.com/HaYanJongSeong/kras-quick/releases/download/v${VERSION}/kras_quick_v${VERSION}.exe`
 
 function cacheDir() {
