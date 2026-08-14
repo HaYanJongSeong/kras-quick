@@ -4,7 +4,7 @@
 Node.js 18 이상에서 npm으로 설치하고 실행합니다.
 
 ```powershell
-npm install -g @hayanjongseong/kras-quick@1.0.5
+npm install -g @hayanjongseong/kras-quick
 kras-quick
 ```
 
