@@ -2,11 +2,12 @@
 .SYNOPSIS
     Publishes kras-quick.exe to a private draft release on GitHub.
 .DESCRIPTION
-    Computes the SHA-256 checksum, writes <exe>.sha256, then creates a DRAFT
-    release on HaYanJongSeong/kras-quick (private repo => private release) and
-    uploads both assets. Use -StageOnly to write only the checksum (offline
-    test seam). Auth comes from gh's own stored credentials - never pass a
-    token as an argument or env var.
+    Computes SHA-256 checksums, writes <exe>.sha256 (and, when
+    kras-quick-runtime-<tag>.zip sits next to the EXE, its .sha256 too), then
+    creates a DRAFT release on HaYanJongSeong/kras-quick (private repo =>
+    private release) and uploads the assets. Use -StageOnly to write only the
+    checksums (offline test seam). Auth comes from gh's own stored credentials -
+    never pass a token as an argument or env var.
 .PARAMETER ExePath
     Path to the built EXE, e.g. C:\Users\admin\Downloads\kras_quick_v0.2.1.exe.
 .PARAMETER Tag
@@ -49,13 +50,26 @@ try {
     if (-not (Test-Path -LiteralPath $ExePath -PathType Leaf)) { throw "EXE not found: $ExePath" }
     if ([System.IO.Path]::GetExtension($ExePath) -ne ".exe") { throw "Not an .exe: $ExePath" }
 
-    # --- 1. Checksum ---
+    # --- 1. Checksums (EXE + optional runtime zip) ---
     $hash = (Get-FileHash -LiteralPath $ExePath -Algorithm SHA256).Hash
     $exeLeaf = Split-Path -Leaf $ExePath
     $shaFile = "$ExePath.sha256"
     Set-Content -LiteralPath $shaFile -Value ("$hash  $exeLeaf") -Encoding Ascii
     Write-Host "Checksum: $hash"
     Write-Host "Wrote:    $shaFile"
+
+    # Runtime zip asset named kras-quick-runtime-<tag>.zip next to the EXE.
+    # Handled only when the file actually exists (exe-only releases stay valid).
+    $zipPath = Join-Path (Split-Path -Parent $ExePath) ("kras-quick-runtime-$Tag.zip")
+    $zipShaFile = "$zipPath.sha256"
+    $hasZip = Test-Path -LiteralPath $zipPath
+    if ($hasZip) {
+        $zipHash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash
+        $zipLeaf = Split-Path -Leaf $zipPath
+        Set-Content -LiteralPath $zipShaFile -Value ("$zipHash  $zipLeaf") -Encoding Ascii
+        Write-Host "Checksum: $zipHash"
+        Write-Host "Wrote:    $zipShaFile"
+    }
 
     if ($StageOnly) { Write-Host "StageOnly - no gh calls."; exit 0 }
 
@@ -65,6 +79,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "gh is not authenticated. Run 'gh auth login' first (token stays in gh's own store, never in args/env)." }
 
     $ghArgs = @($Tag, $ExePath, $shaFile, "--repo", $Repo)
+    if ($hasZip) { $ghArgs += @($zipPath, $zipShaFile) }
     if (-not $Publish) { $ghArgs += "--draft" }
     if ($Title) { $ghArgs += @("--title", $Title) }
     if ($Notes) { $ghArgs += @("--notes", $Notes) }
@@ -75,7 +90,9 @@ try {
     $assets = & $gh release view $Tag --repo $Repo --json assets -q ".assets[].name"
     if ($LASTEXITCODE -ne 0) { throw "gh release view failed (exit $LASTEXITCODE)." }
     $assetsText = $assets -join "`n"
-    foreach ($leaf in @($exeLeaf, "$exeLeaf.sha256")) {
+    $expectedAssets = @($exeLeaf, "$exeLeaf.sha256")
+    if ($hasZip) { $expectedAssets += @($zipLeaf, "$zipLeaf.sha256") }
+    foreach ($leaf in $expectedAssets) {
         if (-not ($assetsText -match [regex]::Escape($leaf))) { throw "Asset missing from release: $leaf" }
     }
     Write-Host "Draft release $Tag ready: https://github.com/$Repo/releases"
