@@ -21,12 +21,13 @@ Write-Host ''
 
 $u = 'https://github.com/HaYanJongSeong/kras-quick/releases/download/v1.0.0/kras_quick_v1.0.0.exe'
 $d = "$env:USERPROFILE\Downloads"
-$exe = "$d\kras_quick_v1.0.0.exe"
-$sum = "$d\kras_quick_v1.0.0.exe.sha256"
+$tmp = "$d\.kras-quick.$([guid]::NewGuid().ToString('N')).tmp"
+$exe = "$tmp.exe"
+$sum = "$tmp.sha256"
 
 step "Downloading kras-quick (~136 MB) ..."
 Invoke-WebRequest $u -OutFile $exe
-ok "Downloaded: $(Split-Path $exe -Leaf)"
+ok 'Downloaded'
 
 step "Downloading SHA-256 checksum ..."
 Invoke-WebRequest "$u.sha256" -OutFile $sum
@@ -36,15 +37,15 @@ step 'Verifying SHA-256 ...'
 $h = ((Get-Content $sum -Raw) -split '\s+')[0]
 $a = (Get-FileHash $exe -Algorithm SHA256).Hash
 if ($h -ne $a) {
+    Remove-Item $exe, $sum -Force -ErrorAction SilentlyContinue
     Write-Host "${RED}${BOLD}  ✗ SHA-256 MISMATCH${RST}${RED} — download corrupted, aborting.${RST}"
     throw 'SHA-256 mismatch'
 }
 ok 'Checksum verified'
 
 step 'Installing ...'
-$t = "$d\kras-quick.exe.$([guid]::NewGuid().ToString('N')).tmp"
-Copy-Item $exe $t
-Move-Item $t "$d\kras-quick.exe" -Force
+Move-Item $exe "$d\kras-quick.exe" -Force
+Remove-Item $sum -Force -ErrorAction SilentlyContinue
 done 'Installed to Downloads\kras-quick.exe'
 
 Write-Host ''
