@@ -5,7 +5,7 @@
   "license": "MIT",
   "type": "module",
   "bin": {
-    "kras-quick": "./bin/kras-quick.js"
+    "kras-quick": "bin/kras-quick.js"
   },
   "files": [
     "bin"
