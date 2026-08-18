@@ -18,7 +18,7 @@ PowerShell에서 아래 명령 하나로 설치하고 실행할 수도 있습니
 irm https://raw.githubusercontent.com/HaYanJongSeong/kras-quick/main/install.ps1 | iex
 ```
 
-> GitHub Releases에서 launcher `kras_quick_v1.0.7.exe`를 받아 SHA-256 검증 후 `Downloads\kras-quick.exe`로 원자적으로 교체하고 실행합니다. 설치 스크립트 원문: [`install.ps1`](install.ps1)
+> GitHub Releases에서 launcher `kras_quick_v1.0.8.exe`를 받아 SHA-256 검증 후 `Downloads\kras-quick.exe`로 원자적으로 교체하고 실행합니다. 설치 스크립트 원문: [`install.ps1`](install.ps1)
 
 ## ⚠️ 요구사항
 
