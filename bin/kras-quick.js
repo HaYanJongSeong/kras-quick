@@ -5,8 +5,8 @@ import { homedir } from "node:os"
 import { join } from "node:path"
 import { spawn } from "node:child_process"
 
-const VERSION = "1.0.8"
-const SHA256 = "148D0944AA800507E59E401CB76E9DE04A5AD5C9205B35318210DD6AB7E3AA66"
+const VERSION = "1.0.9"
+const SHA256 = "A62D3198DCD626F9FB2CF2CF1D8AA59430D7D5EC2015C3D3A8A49B7BCA767AD0"
 const URL = `https://github.com/HaYanJongSeong/kras-quick/releases/download/v${VERSION}/kras_quick_v${VERSION}.exe`
 
 function launcherDir() {
