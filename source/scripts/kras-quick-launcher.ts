@@ -48,6 +48,7 @@ async function ensureChrome(exeDirectory: string): Promise<void> {
 try {
   const exeDirectory = dirname(process.execPath)
   const terminal = createTerminal()
+  process.stdout.write(`KRAS Quick v${runtimeMeta.version}\n`)
   process.stdout.write(`PDF 저장 경로: ${join(exeDirectory, "KRAS")}\n`)
   let chromeChoice: "open" | "reuse" | "exit" = "exit"
   try {

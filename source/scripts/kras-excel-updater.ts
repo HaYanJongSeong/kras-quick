@@ -27,8 +27,11 @@ export type KrasXmlData = {
 export function parseKrasXml(xmlContent: string): KrasXmlData {
   const clean = xmlContent.replace(/^ozdata=?/, "")
   const tag = (t: string): string => {
-    const m = clean.match(new RegExp(`<${t}>([^<]*)</${t}>`))
-    return m?.[1]?.trim() ?? ""
+    const escaped = t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    const m = clean.match(
+      new RegExp(`<(?:(?:[A-Za-z_][\\w.-]*):)?${escaped}\\b[^>]*>([\\s\\S]*?)</(?:(?:[A-Za-z_][\\w.-]*):)?${escaped}\\s*>`, "iu"),
+    )
+    return m?.[1]?.replace(/<[^>]+>/gu, "").trim() ?? ""
   }
   const unqNo = tag("UNQ_NO")
   const jibnParts = unqNo.split("-")
