@@ -51,6 +51,27 @@ describe("KRAS automatic stage state", () => {
     assert.equal(isViewerUrl("https://kras.go.kr/oz80/ozhviewer/report.jsp?x=1"), true)
   })
 
+  it("accepts OZ address metadata with trailing parcel details", async () => {
+    const root = await mkdtemp(join(process.env["TEMP"] ?? ".", "kras-stage3-address-"))
+    const paths = propertyAutoStagePaths(stage2.address, root)
+    try {
+      const result = await runKrasAutoStage3(stage2, {
+        url: () => "https://kras.go.kr/oz80/ozhviewer/report.jsp",
+        hasVisibleCaptcha: async () => false,
+        capturePdf: async () => Buffer.from("pdf"),
+        capturePagePngs: async () => [Buffer.from("png")],
+        readReportXml: async () => VALID_XML.replace(
+          "<LAND_LOC_NM>서울특별시 용산구 용산동2가 5-227</LAND_LOC_NM>",
+          "<LAND_LOC_NM>서울특별시 용산구 용산동2가 5-227 (용산동2가)</LAND_LOC_NM>",
+        ),
+      }, paths)
+
+      assert.equal(result.status, "completed")
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   it("writes Stage 3 artifacts and persists completed state", async () => {
     const root = await mkdtemp(join(process.env["TEMP"] ?? ".", "kras-stage3-"))
     const paths = {
