@@ -128,7 +128,15 @@ async function selectBuildingAndReadFloorRoomOptionsEvaluation(value: string): P
     if (options.length > 0 && Date.now() - stableSince >= 800) return options
     await new Promise((resolve) => window.setTimeout(resolve, 250))
   }
-  throw new KrasFloorRoomLoadTimeoutError()
+  // This function runs in the browser context, so host-side error classes are unavailable.
+  throw new Error("층-호명칭 목록 로딩 시간이 초과되었습니다.")
+}
+
+function isFloorRoomLoadTimeoutError(error: unknown): boolean {
+  return (
+    error instanceof KrasFloorRoomLoadTimeoutError ||
+    (error instanceof Error && error.message === "층-호명칭 목록 로딩 시간이 초과되었습니다.")
+  )
 }
 
 export function renderCaptchaTerminalPixels(
@@ -447,7 +455,7 @@ export async function runKrasWorkflowWatcher(
       }
       break
     } catch (error) {
-      if (!(error instanceof KrasFloorRoomLoadTimeoutError)) throw error
+      if (!isFloorRoomLoadTimeoutError(error)) throw error
       if (hooks.handleFloorRoomOptions === undefined) break
       if ((await hooks.handleFloorRoomOptions(building, "timeout")) === "retry") continue
       break
