@@ -99,6 +99,7 @@ export async function ensureRuntime(meta: RuntimeMeta, env: NodeJS.ProcessEnv): 
   const extractDir = join(cacheDir, `kras-quick-runtime-v${meta.version}`)
   const nodeMarker = join(extractDir, "node", "node.exe")
   const scriptMarker = join(extractDir, "scripts", "property-auto-runner.ts")
+  const tesseractMarker = join(extractDir, "tesseract", "tesseract.exe")
   const extractHashMarker = join(extractDir, ".runtime-sha256")
 
   await mkdir(cacheDir, { recursive: true })
@@ -134,6 +135,7 @@ export async function ensureRuntime(meta: RuntimeMeta, env: NodeJS.ProcessEnv): 
   const extractedReady =
     existsSync(nodeMarker) &&
     existsSync(scriptMarker) &&
+    existsSync(tesseractMarker) &&
     extractedHash === expectedSha.toLowerCase()
   if (!extractedReady) {
     await rm(extractDir, { recursive: true, force: true })
