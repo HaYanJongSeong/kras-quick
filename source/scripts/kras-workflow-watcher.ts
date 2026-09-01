@@ -135,7 +135,7 @@ async function selectBuildingAndReadFloorRoomOptionsEvaluation(value: string): P
 function isFloorRoomLoadTimeoutError(error: unknown): boolean {
   return (
     error instanceof KrasFloorRoomLoadTimeoutError ||
-    (error instanceof Error && error.message === "층-호명칭 목록 로딩 시간이 초과되었습니다.")
+    (error instanceof Error && error.message.includes("층-호명칭 목록 로딩 시간이 초과되었습니다."))
   )
 }
 
