@@ -30,6 +30,7 @@ import {
   updateExcelWithKrasData,
 } from "./kras-excel-updater.ts"
 import { connectKrasOzViewer } from "./kras-oz.ts"
+import { recognizeCaptchaCandidate } from "./kras-tesseract.ts"
 import {
   connectKrasWorkflowWatcher,
   connectOrOpenKrasWorkflowWatcher,
@@ -277,6 +278,14 @@ async function printQuickStage3Result(stage3Path: string): Promise<void> {
   for (const pagePng of stage3.output.pagePngs) process.stdout.write(`PNG: ${pagePng}\n`)
 }
 
+export type QuickAddressInput =
+  | { readonly kind: "address"; readonly address: string }
+  | { readonly kind: "qa" }
+
+export function parseQuickAddressInput(input: string): QuickAddressInput {
+  return input === "QA" ? { kind: "qa" } : { kind: "address", address: input }
+}
+
 export class ReturnToAddressError extends Error {
   constructor() {
     super("Return to address input")
@@ -417,6 +426,7 @@ type PropertyKrasWorkflowOptions = {
   readonly openViewerOnly?: boolean
   readonly excelConfig?: KrasExcelTaskConfig
   readonly quickOutputRoot?: string
+  readonly inputMode?: QuickAddressInput
 }
 
 export async function withKrasWorkflowPage<T>(
@@ -428,6 +438,90 @@ export async function withKrasWorkflowPage<T>(
     return await action(page)
   } finally {
     await page.disconnect?.()
+  }
+}
+
+type QuickCaptchaPage = Pick<
+  KrasWorkflowPage,
+  "captureCaptchaImage" | "renderCaptchaTerminal" | "fillCaptchaAndSubmit"
+>
+
+type QuickCaptchaOptions = {
+  readonly page: QuickCaptchaPage
+  readonly terminal: TerminalReader
+  readonly mode: QuickAddressInput
+  readonly recognize?: (pngBase64: string) => Promise<string | null>
+}
+
+export async function handleQuickCaptcha(options: QuickCaptchaOptions): Promise<void> {
+  const captchaAnsi = await options.page.renderCaptchaTerminal()
+  if (captchaAnsi === null) {
+    process.stdout.write(
+      "보안문자 이미지를 자동으로 찾을 수 없습니다. 수동으로 입력 후 열람 버튼을 눌러주세요.\n",
+    )
+    await options.terminal.question("수동 완료 후 Enter를 누르세요: ")
+    return
+  }
+  process.stdout.write(`\n보안문자 이미지:\n${captchaAnsi}\n`)
+
+  if (options.mode.kind === "qa") {
+    const pngBase64 = await options.page.captureCaptchaImage()
+    let candidate: string | null = null
+    if (pngBase64 !== null) {
+      try {
+        candidate = await (options.recognize ?? recognizeCaptchaCandidate)(pngBase64)
+      } catch (error: unknown) {
+        process.stdout.write(
+          `QA 보안문자 판독을 사용할 수 없습니다. 수동 입력으로 전환합니다. (${error instanceof Error ? error.name : "unknown error"})\n`,
+        )
+      }
+    }
+    if (candidate !== null) {
+      process.stdout.write(`QA 보안문자 후보: ${candidate}\n`)
+      while (true) {
+        const confirmation = (
+          await options.terminal.question("후보를 제출할까요? (1: 네 / 2: 아니오)\n")
+        ).trim()
+        if (confirmation === "1") {
+          const submitted = await options.page.fillCaptchaAndSubmit(candidate)
+          if (submitted === "success") {
+            process.stdout.write("보안문자 입력 및 열람 버튼 클릭 완료\n")
+            return
+          }
+          process.stdout.write("자동 제출 실패. 수동 입력으로 전환합니다.\n")
+          break
+        }
+        if (confirmation === "2") break
+        process.stdout.write("1 또는 2를 입력해 주세요.\n")
+      }
+    } else {
+      process.stdout.write("QA 보안문자 후보를 얻지 못했습니다. 수동 입력으로 전환합니다.\n")
+    }
+  }
+
+  while (true) {
+    const captchaText = (await options.terminal.question("\n보안문자를 입력하세요: ")).trim()
+    if (captchaText.length < 4) {
+      process.stdout.write("보안문자가 너무 짧습니다. 다시 입력해 주세요.\n")
+      continue
+    }
+    const submitted = await options.page.fillCaptchaAndSubmit(captchaText)
+    if (submitted === "success") {
+      process.stdout.write("보안문자 입력 및 열람 버튼 클릭 완료\n")
+      return
+    }
+    if (submitted === "need_lookup") {
+      process.stdout.write(
+        "건물 조회가 필요합니다. 브라우저에서 직접 조회한 뒤 열람 버튼을 눌러주세요.\n",
+      )
+      await options.terminal.question("조회 및 열람 완료 후 Enter를 누르세요: ")
+      return
+    }
+    process.stdout.write("자동 제출 실패. 다시 시도해 주세요.\n")
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    const refreshedCaptchaAnsi = await options.page.renderCaptchaTerminal()
+    if (refreshedCaptchaAnsi !== null)
+      process.stdout.write(`\n새 보안문자 이미지:\n${refreshedCaptchaAnsi}\n`)
   }
 }
 
@@ -586,42 +680,12 @@ async function runPropertyKrasWorkflowOnPage(
       ).trim() || undefined
   }
   process.stdout.write("Stage 2: 보안문자를 입력한 후 열람버튼을 눌러주세요.\n")
-  // CAPTCHA 자동 처리: 이미지 캡처 -> 터미널 ANSI 렌더링 -> 입력 -> 열람 버튼 자동 클릭
   if (terminal !== undefined) {
-    const captchaAnsi = await page.renderCaptchaTerminal()
-    if (captchaAnsi) {
-      process.stdout.write("\n보안문자 이미지:\n")
-      process.stdout.write(`${captchaAnsi}\n`)
-      while (true) {
-        const captchaText = (await terminal.question("\n보안문자를 입력하세요: ")).trim()
-        if (captchaText.length >= 4) {
-          const submitted = await page.fillCaptchaAndSubmit(captchaText)
-          if (submitted === "success") {
-            process.stdout.write("보안문자 입력 및 열람 버튼 클릭 완료\n")
-            break
-          }
-          if (submitted === "need_lookup") {
-            process.stdout.write(
-              "건물 조회가 필요합니다. 브라우저에서 직접 조회한 뒤 열람 버튼을 눌러주세요.\n",
-            )
-            await terminal.question("조회 및 열람 완료 후 Enter를 누르세요: ")
-            break
-          }
-          process.stdout.write("자동 제출 실패. 다시 시도해 주세요.\n")
-          await new Promise((resolve) => setTimeout(resolve, 500))
-          const refreshedCaptchaAnsi = await page.renderCaptchaTerminal()
-          if (refreshedCaptchaAnsi)
-            process.stdout.write(`\n새 보안문자 이미지:\n${refreshedCaptchaAnsi}\n`)
-        } else {
-          process.stdout.write("보안문자가 너무 짧습니다. 다시 입력해 주세요.\n")
-        }
-      }
-    } else {
-      process.stdout.write(
-        "보안문자 이미지를 자동으로 찾을 수 없습니다. 수동으로 입력 후 열람 버튼을 눌러주세요.\n",
-      )
-      await terminal.question("수동 완료 후 Enter를 누르세요: ")
-    }
+    await handleQuickCaptcha({
+      page,
+      terminal,
+      mode: options.inputMode ?? { kind: "address", address: rawAddress },
+    })
   }
   process.stdout.write("OZ 뷰어 팝업 대기 중...\n")
   const ozDetected = await page.awaitOzViewer()
@@ -800,14 +864,23 @@ async function main(): Promise<void> {
         const quickTerminal = createAddressReturningTerminal(terminal)
         const quickAddressPrompt =
           "\n주소 입력 또는 작업 선택\n0: 기본 주소(서울특별시 노원구 월계동 392-19)\n주소: 새 주소 조회\n1: 현재 건물 목록에서 다시 선택\n3: OZ 뷰어를 기다린 뒤 직전 주소로 저장\n작업 중 /주소: 이 화면으로 돌아오기\nEnter: 종료\n입력 > "
+        const qaAddressPrompt = "\x1b[38;2;255;165;0m주소 입력 > \x1b[0m"
         let address =
           args.length >= 2
             ? args.slice(1).join(" ")
             : (await terminal.question(quickAddressPrompt)).trim()
         let previousAddress: string | undefined
+        let qaMode = false
         while (address !== "") {
+          const parsedInputMode = parseQuickAddressInput(address)
+          if (parsedInputMode.kind === "qa") {
+            qaMode = !qaMode
+            address = (await terminal.question(qaMode ? qaAddressPrompt : quickAddressPrompt)).trim()
+            if (address === "") break
+          }
+          const inputMode: QuickAddressInput = qaMode ? { kind: "qa" } : parsedInputMode
           if (address === "/주소") {
-            address = (await terminal.question(quickAddressPrompt)).trim()
+            address = (await terminal.question(qaMode ? qaAddressPrompt : quickAddressPrompt)).trim()
             continue
           }
           if (address === "0") address = "서울특별시 노원구 월계동 392-19"
@@ -819,16 +892,17 @@ async function main(): Promise<void> {
                 await runPropertyKrasWorkflow(previousAddress, quickTerminal, {
                   reuseLoadedOptions: true,
                   quickOutputRoot,
+                  inputMode: qaMode ? { kind: "qa" } : { kind: "address", address: previousAddress },
                 })
               } catch (error: unknown) {
                 if (error instanceof ReturnToAddressError) {
-                  address = (await terminal.question(quickAddressPrompt)).trim()
+                  address = (await terminal.question(qaMode ? qaAddressPrompt : quickAddressPrompt)).trim()
                   continue
                 }
                 process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
               }
             }
-            address = (await terminal.question(quickAddressPrompt)).trim()
+            address = (await terminal.question(qaMode ? qaAddressPrompt : quickAddressPrompt)).trim()
             continue
           }
           if (address === "3") {
@@ -874,22 +948,23 @@ async function main(): Promise<void> {
               }
             } catch (error: unknown) {
               if (error instanceof ReturnToAddressError) {
-                address = (await terminal.question(quickAddressPrompt)).trim()
+                address = (await terminal.question(qaMode ? qaAddressPrompt : quickAddressPrompt)).trim()
                 continue
               }
               process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
             }
-            address = (await terminal.question(quickAddressPrompt)).trim()
+            address = (await terminal.question(qaMode ? qaAddressPrompt : quickAddressPrompt)).trim()
             continue
           }
           try {
             const reusable = await runPropertyKrasWorkflow(address, quickTerminal, {
               quickOutputRoot,
+              inputMode,
             })
             previousAddress = nextPreviousAddress(previousAddress, address, reusable)
           } catch (error: unknown) {
             if (error instanceof ReturnToAddressError) {
-              address = (await terminal.question(quickAddressPrompt)).trim()
+              address = (await terminal.question(qaMode ? qaAddressPrompt : quickAddressPrompt)).trim()
               continue
             }
             process.stderr.write(
@@ -897,7 +972,7 @@ async function main(): Promise<void> {
             )
             process.stdout.write("다시 주소를 입력하거나 다음 작업을 선택해 주세요.\n")
           }
-          address = (await terminal.question(quickAddressPrompt)).trim()
+          address = (await terminal.question(qaMode ? qaAddressPrompt : quickAddressPrompt)).trim()
         }
         process.stdout.write("종료합니다.\n")
       } catch (error: unknown) {
