@@ -1,4 +1,4 @@
-﻿import { spawn } from "node:child_process"
+﻿import { execFile, spawn } from "node:child_process"
 import { existsSync } from "node:fs"
 import { readFile } from "node:fs/promises"
 import { dirname, join } from "node:path"
@@ -38,7 +38,7 @@ import {
   type KrasWorkflowPage,
   runKrasWorkflowWatcher,
 } from "./kras-workflow-watcher.ts"
-import { parseParcelAddress } from "./property-address.ts"
+import { PropertyAddressError, parseParcelAddress } from "./property-address.ts"
 import { discoverKrasTarget } from "./property-watcher-page.ts"
 import {
   connectPropertyWatcherBrowser,
@@ -50,6 +50,8 @@ const watcherRunnerPath = join(
   dirname(process.argv[1] ?? process.execPath),
   "property-watcher-runner.ts",
 )
+
+export const KRAS_QUICK_VERSION = "1.1.5"
 
 export type PropertyAutoDependencies = {
   readonly runCli: (args: readonly string[]) => Promise<number>
@@ -297,10 +299,23 @@ export function createAddressReturningTerminal(terminal: TerminalReader): Termin
   return {
     question: async (prompt) => {
       const answer = await terminal.question(prompt)
-      if (answer.trim() === "/주소") throw new ReturnToAddressError()
+      if (answer.trim() === "*") throw new ReturnToAddressError()
       return answer
     },
     close: () => terminal.close(),
+  }
+}
+
+type YesNoChoice = "yes" | "no"
+
+// Enter=예/계속, 0=아니오, *=주소 화면 복귀. *은 주소 복귀 전용 명령이라 0(아니오)과 구분한다.
+async function askYesNo(terminal: TerminalReader, prompt: string): Promise<YesNoChoice> {
+  while (true) {
+    const answer = (await terminal.question(prompt)).trim()
+    if (answer === "*") throw new ReturnToAddressError()
+    if (answer === "") return "yes"
+    if (answer === "0") return "no"
+    process.stdout.write("Enter(예) 또는 0(아니오) 또는 *(주소 화면)을 입력해 주세요.\n")
   }
 }
 
@@ -308,33 +323,23 @@ async function askCloseOzViewer(
   terminal: TerminalReader,
   page: Pick<KrasWorkflowPage, "closeOzViewer">,
 ): Promise<void> {
-  while (true) {
-    const answer = (
-      await terminal.question(
-        "오즈뷰어를 종료할까요? (1: 종료하고 주소 입력 / 2: 유지하고 주소 입력)\n",
-      )
-    ).trim()
-    if (answer === "1") {
-      const closed = await page.closeOzViewer()
-      process.stdout.write(
-        closed ? "오즈뷰어 종료 완료.\n" : "오즈뷰어 탭을 찾지 못했습니다. (수동 종료 필요)\n",
-      )
-      return
-    }
-    if (answer === "2") return
-    process.stdout.write("1 또는 2를 입력해 주세요.\n")
-  }
+  const choice = await askYesNo(
+    terminal,
+    "오즈뷰어를 종료할까요? (Enter: 종료하고 주소 입력 / 0: 유지하고 주소 입력 / *: 주소 화면으로)\n",
+  )
+  if (choice === "no") return
+  const closed = await page.closeOzViewer()
+  process.stdout.write(
+    closed ? "오즈뷰어 종료 완료.\n" : "오즈뷰어 탭을 찾지 못했습니다. (수동 종료 필요)\n",
+  )
 }
 
 async function askOzViewerLoaded(terminal: TerminalReader): Promise<boolean> {
-  while (true) {
-    const answer = (
-      await terminal.question("오즈뷰어가 로딩되었나요? (1: 예 / 2: 다음 주소로 건너뛰기)\n")
-    ).trim()
-    if (answer === "1") return true
-    if (answer === "2") return false
-    process.stdout.write("1 또는 2를 입력해 주세요.\n")
-  }
+  const choice = await askYesNo(
+    terminal,
+    "오즈뷰어가 로딩되었나요? (Enter: 예 / 0: 다음 주소로 건너뛰기 / *: 주소 화면으로)\n",
+  )
+  return choice === "yes"
 }
 
 type QuickStage3Runner = (
@@ -354,17 +359,11 @@ export async function finishQuickOzWorkflow(
   let capture = true
   let returningToAddress = false
   if (terminal !== undefined) {
-    while (true) {
-      const answer = (
-        await terminal.question("OZ 뷰어 작업을 선택하세요. (1: 캡처 / 2: 아무것도 안 함)\n")
-      ).trim()
-      if (answer === "1") break
-      if (answer === "2") {
-        capture = false
-        break
-      }
-      process.stdout.write("1 또는 2를 입력해 주세요.\n")
-    }
+    const choice = await askYesNo(
+      terminal,
+      "OZ 뷰어 작업: 캡처할까요? (Enter: 캡처 / 0: 아무것도 안 함 / *: 주소 화면으로)\n",
+    )
+    if (choice === "no") capture = false
   }
   try {
     if (capture) {
@@ -427,6 +426,8 @@ type PropertyKrasWorkflowOptions = {
   readonly excelConfig?: KrasExcelTaskConfig
   readonly quickOutputRoot?: string
   readonly inputMode?: QuickAddressInput
+  // /2 층-호수 복귀 시 저장된 건물을 즉시 재선택
+  readonly presetBuildingIndex?: number
 }
 
 export async function withKrasWorkflowPage<T>(
@@ -468,31 +469,43 @@ export async function handleQuickCaptcha(options: QuickCaptchaOptions): Promise<
     const pngBase64 = await options.page.captureCaptchaImage()
     let candidate: string | null = null
     if (pngBase64 !== null) {
-      try {
-        candidate = await (options.recognize ?? recognizeCaptchaCandidate)(pngBase64)
-      } catch (error: unknown) {
-        process.stdout.write(
-          `QA 보안문자 판독을 사용할 수 없습니다. 수동 입력으로 전환합니다. (${error instanceof Error ? error.name : "unknown error"})\n`,
-        )
+      const maxAttempts = 3
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+          candidate = await (options.recognize ?? recognizeCaptchaCandidate)(pngBase64)
+        } catch (error: unknown) {
+          if (error instanceof Error && error.name === "TesseractBinaryMissingError") {
+            process.stdout.write(
+              "QA 보안문자 판독을 사용할 수 없습니다. 수동 입력으로 전환합니다. (TesseractBinaryMissingError)\n",
+            )
+            break
+          }
+          process.stdout.write(
+            `QA 보안문자 판독 실패 (${attempt}/${maxAttempts}). 재판독을 시도합니다. (${error instanceof Error ? error.name : "unknown error"})\n`,
+          )
+          continue
+        }
+        if (candidate !== null) break
+        if (attempt < maxAttempts) {
+          process.stdout.write(
+            `QA 보안문자 후보를 얻지 못했습니다 (${attempt}/${maxAttempts}). 재판독을 시도합니다.\n`,
+          )
+        }
       }
     }
     if (candidate !== null) {
       process.stdout.write(`QA 보안문자 후보: ${candidate}\n`)
-      while (true) {
-        const confirmation = (
-          await options.terminal.question("후보를 제출할까요? (1: 네 / 2: 아니오)\n")
-        ).trim()
-        if (confirmation === "1") {
-          const submitted = await options.page.fillCaptchaAndSubmit(candidate)
-          if (submitted === "success") {
-            process.stdout.write("보안문자 입력 및 열람 버튼 클릭 완료\n")
-            return
-          }
-          process.stdout.write("자동 제출 실패. 수동 입력으로 전환합니다.\n")
-          break
+      const confirmed = await askYesNo(
+        options.terminal,
+        "후보를 제출할까요? (Enter: 제출 / 0: 아니오 / *: 주소 화면으로)\n",
+      )
+      if (confirmed === "yes") {
+        const submitted = await options.page.fillCaptchaAndSubmit(candidate)
+        if (submitted === "success") {
+          process.stdout.write("보안문자 입력 및 열람 버튼 클릭 완료\n")
+          return
         }
-        if (confirmation === "2") break
-        process.stdout.write("1 또는 2를 입력해 주세요.\n")
+        process.stdout.write("자동 제출 실패. 수동 입력으로 전환합니다.\n")
       }
     } else {
       process.stdout.write("QA 보안문자 후보를 얻지 못했습니다. 수동 입력으로 전환합니다.\n")
@@ -577,41 +590,46 @@ async function runPropertyKrasWorkflowOnPage(
         handleLookupError: async () => {
           while (true) {
             const answer = (
-              await terminal.question("조회 실패. 1: 지금 다시 확인 / 2: 무시하고 수동 열람 진행\n")
+              await terminal.question(
+                "조회 실패. (Enter: 지금 다시 확인 / 0: 무시하고 수동 열람 진행 / *: 주소 화면으로)\n",
+              )
             ).trim()
-            if (answer === "1") return "retry"
-            if (answer === "2") return "manual"
-            process.stdout.write("1 또는 2를 입력해 주세요.\n")
+            if (answer === "*") throw new ReturnToAddressError()
+            if (answer === "") return "retry"
+            if (answer === "0") return "manual"
+            process.stdout.write("Enter, 0, 또는 * 을 입력해 주세요.\n")
           }
         },
         handleFloorRoomOptions: async (building, status) => {
           while (true) {
             const prompt =
               status === "empty"
-                ? `${building.label}에 층-호명칭 정보가 없습니다.\n1: 건물 전체로 계속 / 2: 다시 로드\n`
-                : `${building.label}의 층-호명칭 정보가 4초 동안 바뀌지 않았습니다.\n1: 건물정보 및 층-호명칭 다시 로드 / 2: 층-호명칭 없이 계속\n`
+                ? `${building.label}에 층-호명칭 정보가 없습니다.\nEnter: 건물 전체로 계속 / 0: 다시 로드\n`
+                : `${building.label}의 층-호명칭 정보가 4초 동안 바뀌지 않았습니다.\nEnter: 층-호명칭 없이 계속 / 0: 층-호명칭 다시 로드\n`
             const answer = (await terminal.question(prompt)).trim()
-            if (status === "empty") {
-              if (answer === "1") return "continue"
-              if (answer === "2") return "retry"
-            } else {
-              if (answer === "1") return "retry"
-              if (answer === "2") return "continue"
-            }
-            process.stdout.write("1 또는 2를 입력해 주세요.\n")
+            if (answer === "") return "continue"
+            if (answer === "0") return "retry"
+            process.stdout.write("Enter 또는 0을 입력해 주세요.\n")
           }
         },
         chooseBuilding: async (buildingOptions) => {
-          while (true) {
-            const answer = await terminal.question(
-              options.quickOutputRoot === undefined
-                ? "몇 번의 건물을 선택할까요? (0: 수동 열람, -1: 주소 입력으로 돌아가기)\n"
-                : "몇 번의 건물을 선택할까요? (-1: 수동 열람, /주소: 주소 입력으로 돌아가기)\n",
+          if (options.presetBuildingIndex !== undefined) {
+            const preset = buildingOptions.find(
+              ({ index }) => index === options.presetBuildingIndex,
             )
-            const displayIndex = Number(answer.trim())
-            if (options.quickOutputRoot !== undefined && displayIndex === -1) return undefined
-            if (options.quickOutputRoot === undefined && displayIndex === -1) return "address"
-            if (options.quickOutputRoot === undefined && displayIndex === 0) return undefined
+            if (preset !== undefined) return preset.index
+            process.stdout.write("저장된 건물을 찾지 못해 건물 목록으로 진행합니다.\n")
+          }
+          while (true) {
+            const answer = (await terminal.question("몇 번의 건물을 선택할까요? ")).trim()
+            if (answer === "*") throw new ReturnToAddressError()
+            if (options.quickOutputRoot === undefined) {
+              if (answer === "0") return undefined
+              if (answer === "-1") return "address"
+            } else if (answer === "-1") {
+              return undefined
+            }
+            const displayIndex = Number(answer)
             const option = buildingOptions[displayIndex - 2]
             if (Number.isSafeInteger(displayIndex) && option !== undefined) return option.index
             process.stdout.write("건물 번호가 올바르지 않습니다. 목록 번호를 입력해 주세요.\n")
@@ -647,22 +665,16 @@ async function runPropertyKrasWorkflowOnPage(
     result.stage1.status === "blocked" && result.stage1.reason === "no_building"
   if (stage2 === undefined) {
     if (terminal === undefined) throw new Error("Stage 2 not started: no building found")
-    while (true) {
-      const answer = (
-        await terminal.question(
-          "건물이 없습니다. 토지로 열람할까요? (1: 네 / 2: 아니오, 다른 주소 입력)\n",
-        )
-      ).trim()
-      if (answer === "1") {
-        stage2 = createKrasManualStage2Result(result.stage1)
-        await writeManualStage2ForRoot(result.stage1, options.quickOutputRoot)
-        break
-      }
-      if (answer === "2") {
-        process.stdout.write("다른 주소를 입력해 주세요.\n")
-        return false
-      }
-      process.stdout.write("1 또는 2를 입력해 주세요.\n")
+    const landAnswer = await askYesNo(
+      terminal,
+      "건물이 없습니다. 토지로 열람할까요? (Enter: 예 / 0: 아니오, 다른 주소 입력 / *: 주소 화면으로)\n",
+    )
+    if (landAnswer === "yes") {
+      stage2 = createKrasManualStage2Result(result.stage1)
+      await writeManualStage2ForRoot(result.stage1, options.quickOutputRoot)
+    } else {
+      process.stdout.write("다른 주소를 입력해 주세요.\n")
+      return false
     }
   }
   const reusable = stage2.status === "completed"
@@ -775,6 +787,73 @@ export function nextPreviousAddress(
   return reusable ? currentAddress : previousAddress
 }
 
+type PresetBuilding = { readonly index: number; readonly aggregate: boolean }
+
+async function readPresetBuildingIndex(
+  address: string,
+  quickOutputRoot: string,
+): Promise<PresetBuilding | undefined> {
+  const stage2Path = propertyAutoStagePaths(address, quickOutputRoot).stage2Json
+  if (!existsSync(stage2Path)) return undefined
+  try {
+    const stage2 = parseKrasAutoStage2Result(JSON.parse(await readFile(stage2Path, "utf8")))
+    if (stage2.status !== "completed") return undefined
+    return {
+      index: stage2.building.index,
+      aggregate: stage2.building.label.includes("(집합)"),
+    }
+  } catch {
+    return undefined
+  }
+}
+
+async function pasteClipboard(): Promise<string> {
+  try {
+    const text = await new Promise<string>((resolve, reject) => {
+      execFile(
+        "powershell",
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-Command",
+          "[Console]::OutputEncoding=[Text.Encoding]::UTF8; Get-Clipboard -Raw",
+        ],
+        { shell: false, windowsHide: true, timeout: 3000 },
+        (error, stdout) => (error === null ? resolve(stdout) : reject(error)),
+      )
+    })
+    return text.replace(/\r?\n/g, " ").trim()
+  } catch {
+    return ""
+  }
+}
+
+async function readQuickAddress(terminal: TerminalReader, prompt: string): Promise<string> {
+  while (true) {
+    const input = (await terminal.question(prompt)).trim()
+    if (input === "+") {
+      const pasted = await pasteClipboard()
+      if (pasted === "") {
+        process.stdout.write("클립보드가 비어 있거나 읽을 수 없습니다.\n")
+        continue
+      }
+      return pasted
+    }
+    if (input === "") {
+      while (true) {
+        const confirm = (
+          await terminal.question("종료하시겠습니까? Enter: 예(종료) / 0: 아니오(입력 창으로)\n")
+        ).trim()
+        if (confirm === "") return ""
+        if (confirm === "0") break
+        process.stdout.write("Enter(예) 또는 0(아니오)을 입력해 주세요.\n")
+      }
+      continue
+    }
+    return input
+  }
+}
+
 export async function runPropertyAutoPipeline(
   args: readonly string[],
   dependencies: PropertyAutoDependencies = nodeDependencies,
@@ -835,19 +914,42 @@ async function main(): Promise<void> {
     if (args[0] === "quick") {
       const terminal = createTerminal()
       try {
-        await withKrasWorkflowPage(connectOrOpenKrasWorkflowWatcher, async () => undefined)
+        // 런처가 KRAS_CDP_ENDPOINT를 설정해 오면 배너/Chrome 열기는 런처가 이미 처리했으므로 건너뛴다 (직접 실행일 때만 처리).
+        if (process.env["KRAS_CDP_ENDPOINT"] === undefined) {
+          process.stdout.write(`kras-quick v${KRAS_QUICK_VERSION}\n`)
+          while (true) {
+            const chromeAnswer = (
+              await terminal.question(
+                "Chrome을 열까요?\n0: 아니오 (직접 Chrome을 열어 로그인한 뒤 그 페이지에서 계속)\nEnter: 예 (프로그램이 Chrome 열기)\n입력 > ",
+              )
+            ).trim()
+            if (chromeAnswer === "0") {
+              process.stdout.write("Chrome을 직접 열어주세요.\n")
+              break
+            }
+            if (chromeAnswer === "") {
+              await withKrasWorkflowPage(connectOrOpenKrasWorkflowWatcher, async () => undefined)
+              break
+            }
+            process.stdout.write("Enter(예) 또는 0(아니오)을 입력해 주세요.\n")
+          }
+        }
         while (true) {
           const loginAnswer = (
             await terminal.question(
-              "Chrome의 KRAS 페이지에서 로그인해주세요. 로그인이 끝났나요?\n1. 예\n2. 아니오\n선택 > ",
+              "Chrome의 KRAS 페이지에서 로그인해주세요. 로그인이 끝났나요?\nEnter: 예 (로그인 완료)\n0: 아니오 (아직 로그인 안 됨)\n입력 > ",
             )
           ).trim()
-          if (loginAnswer === "2") {
-            process.stdout.write("로그인을 완료한 후 1을 입력해 주세요.\n")
+          if (loginAnswer === "*") {
+            process.stdout.write("아직 주소를 조회할 수 없습니다. 로그인을 먼저 완료해 주세요.\n")
             continue
           }
-          if (loginAnswer !== "1") {
-            process.stdout.write("1 또는 2를 입력해 주세요.\n")
+          if (loginAnswer === "0") {
+            process.stdout.write("로그인을 완료한 후 Enter를 눌러 주세요.\n")
+            continue
+          }
+          if (loginAnswer !== "") {
+            process.stdout.write("Enter(예) 또는 0(아니오)을 입력해 주세요.\n")
             continue
           }
           try {
@@ -863,28 +965,34 @@ async function main(): Promise<void> {
         const quickOutputRoot = join(quickRoot, "KRAS")
         const quickTerminal = createAddressReturningTerminal(terminal)
         const quickAddressPrompt =
-          "\n주소 입력 또는 작업 선택\n0: 기본 주소(서울특별시 노원구 월계동 392-19)\n주소: 새 주소 조회\n1: 현재 건물 목록에서 다시 선택\n3: OZ 뷰어를 기다린 뒤 직전 주소로 저장\n작업 중 /주소: 이 화면으로 돌아오기\nEnter: 종료\n입력 > "
+          "\n주소 입력 또는 작업 선택\n-: 기본 주소(서울특별시 노원구 월계동 392-19)\n주소: 새 주소 조회\n.: 이 주소의 건물 목록으로 돌아가기\n..: 이 건물의 층-호수로 돌아가기 (집합건물일 때만)\n*: 주소 입력 화면으로 돌아오기\n0: OZ 뷰어 수동 열람 (직전 주소 저장)\nEnter: 종료\n+: 클립보드 붙여넣기 (입력 후 Enter)\n입력 > "
         const qaAddressPrompt = "\x1b[38;2;255;165;0m주소 입력 > \x1b[0m"
         let address =
           args.length >= 2
             ? args.slice(1).join(" ")
-            : (await terminal.question(quickAddressPrompt)).trim()
+            : await readQuickAddress(terminal, quickAddressPrompt)
         let previousAddress: string | undefined
         let qaMode = false
         while (address !== "") {
           const parsedInputMode = parseQuickAddressInput(address)
           if (parsedInputMode.kind === "qa") {
             qaMode = !qaMode
-            address = (await terminal.question(qaMode ? qaAddressPrompt : quickAddressPrompt)).trim()
+            address = await readQuickAddress(
+              terminal,
+              qaMode ? qaAddressPrompt : quickAddressPrompt,
+            )
             if (address === "") break
           }
           const inputMode: QuickAddressInput = qaMode ? { kind: "qa" } : parsedInputMode
-          if (address === "/주소") {
-            address = (await terminal.question(qaMode ? qaAddressPrompt : quickAddressPrompt)).trim()
+          if (address === "*") {
+            address = await readQuickAddress(
+              terminal,
+              qaMode ? qaAddressPrompt : quickAddressPrompt,
+            )
             continue
           }
-          if (address === "0") address = "서울특별시 노원구 월계동 392-19"
-          if (address === "1") {
+          if (address === "-") address = "서울특별시 노원구 월계동 392-19"
+          if (address === ".") {
             if (previousAddress === undefined) {
               process.stdout.write("직전 주소가 없습니다. 먼저 주소를 입력해 주세요.\n")
             } else {
@@ -892,20 +1000,65 @@ async function main(): Promise<void> {
                 await runPropertyKrasWorkflow(previousAddress, quickTerminal, {
                   reuseLoadedOptions: true,
                   quickOutputRoot,
-                  inputMode: qaMode ? { kind: "qa" } : { kind: "address", address: previousAddress },
+                  inputMode: qaMode
+                    ? { kind: "qa" }
+                    : { kind: "address", address: previousAddress },
                 })
               } catch (error: unknown) {
                 if (error instanceof ReturnToAddressError) {
-                  address = (await terminal.question(qaMode ? qaAddressPrompt : quickAddressPrompt)).trim()
+                  address = await readQuickAddress(
+                    terminal,
+                    qaMode ? qaAddressPrompt : quickAddressPrompt,
+                  )
                   continue
                 }
                 process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
               }
             }
-            address = (await terminal.question(qaMode ? qaAddressPrompt : quickAddressPrompt)).trim()
+            address = await readQuickAddress(
+              terminal,
+              qaMode ? qaAddressPrompt : quickAddressPrompt,
+            )
             continue
           }
-          if (address === "3") {
+          if (address === "..") {
+            if (previousAddress === undefined) {
+              process.stdout.write("직전 주소가 없습니다. 먼저 주소를 입력해 주세요.\n")
+            } else {
+              const preset = await readPresetBuildingIndex(previousAddress, quickOutputRoot)
+              if (preset === undefined || !preset.aggregate) {
+                process.stdout.write("층-호수 정보가 없습니다. 다시 입력해 주세요.\n")
+              } else {
+                try {
+                  await runPropertyKrasWorkflow(previousAddress, quickTerminal, {
+                    reuseLoadedOptions: true,
+                    quickOutputRoot,
+                    presetBuildingIndex: preset.index,
+                    inputMode: qaMode
+                      ? { kind: "qa" }
+                      : { kind: "address", address: previousAddress },
+                  })
+                } catch (error: unknown) {
+                  if (error instanceof ReturnToAddressError) {
+                    address = await readQuickAddress(
+                      terminal,
+                      qaMode ? qaAddressPrompt : quickAddressPrompt,
+                    )
+                    continue
+                  }
+                  process.stderr.write(
+                    `${error instanceof Error ? error.message : String(error)}\n`,
+                  )
+                }
+              }
+            }
+            address = await readQuickAddress(
+              terminal,
+              qaMode ? qaAddressPrompt : quickAddressPrompt,
+            )
+            continue
+          }
+          if (address === "0") {
             try {
               const targetAddress =
                 previousAddress ??
@@ -948,12 +1101,18 @@ async function main(): Promise<void> {
               }
             } catch (error: unknown) {
               if (error instanceof ReturnToAddressError) {
-                address = (await terminal.question(qaMode ? qaAddressPrompt : quickAddressPrompt)).trim()
+                address = await readQuickAddress(
+                  terminal,
+                  qaMode ? qaAddressPrompt : quickAddressPrompt,
+                )
                 continue
               }
               process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
             }
-            address = (await terminal.question(qaMode ? qaAddressPrompt : quickAddressPrompt)).trim()
+            address = await readQuickAddress(
+              terminal,
+              qaMode ? qaAddressPrompt : quickAddressPrompt,
+            )
             continue
           }
           try {
@@ -964,7 +1123,19 @@ async function main(): Promise<void> {
             previousAddress = nextPreviousAddress(previousAddress, address, reusable)
           } catch (error: unknown) {
             if (error instanceof ReturnToAddressError) {
-              address = (await terminal.question(qaMode ? qaAddressPrompt : quickAddressPrompt)).trim()
+              address = await readQuickAddress(
+                terminal,
+                qaMode ? qaAddressPrompt : quickAddressPrompt,
+              )
+              continue
+            }
+            if (error instanceof PropertyAddressError) {
+              process.stderr.write("주소가 올바르지 않습니다. 다시 입력해 주세요.\n")
+              process.stdout.write("다시 주소를 입력하거나 다음 작업을 선택해 주세요.\n")
+              address = await readQuickAddress(
+                terminal,
+                qaMode ? qaAddressPrompt : quickAddressPrompt,
+              )
               continue
             }
             process.stderr.write(
@@ -972,7 +1143,7 @@ async function main(): Promise<void> {
             )
             process.stdout.write("다시 주소를 입력하거나 다음 작업을 선택해 주세요.\n")
           }
-          address = (await terminal.question(qaMode ? qaAddressPrompt : quickAddressPrompt)).trim()
+          address = await readQuickAddress(terminal, qaMode ? qaAddressPrompt : quickAddressPrompt)
         }
         process.stdout.write("종료합니다.\n")
       } catch (error: unknown) {

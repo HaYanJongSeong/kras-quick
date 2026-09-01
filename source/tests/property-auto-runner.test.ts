@@ -33,7 +33,7 @@ function dependencies(calls: string[], cliExitCode = 0): PropertyAutoDependencie
 
 describe("property auto CLI pipeline", () => {
   it("routes exact slash-address input while preserving ordinary answers", async () => {
-    const answers = [" /주소 ", "101호"]
+    const answers = [" * ", "101호"]
     const terminal = createAddressReturningTerminal({
       question: async () => answers.shift() ?? "",
       close: () => undefined,
@@ -45,7 +45,7 @@ describe("property auto CLI pipeline", () => {
 
   it("returns from a filename conflict without closing the OZ viewer", async () => {
     // Given
-    const answers = ["1", "/주소", "1"]
+    const answers = ["", "*", "unused"]
     let closeCalls = 0
     const terminal = createAddressReturningTerminal({
       question: async () => answers.shift() ?? "",
@@ -83,9 +83,9 @@ describe("property auto CLI pipeline", () => {
     assert.deepEqual(parseQuickAddressInput(" QA "), { kind: "address", address: " QA " })
   })
 
-  it("submits a QA OCR candidate only after explicit 1 confirmation", async () => {
+  it("submits a QA OCR candidate after an explicit Enter confirmation", async () => {
     const calls: string[] = []
-    const answers = ["1"]
+    const answers = [""]
     await handleQuickCaptcha({
       page: {
         captureCaptchaImage: async () => {
@@ -111,9 +111,9 @@ describe("property auto CLI pipeline", () => {
     assert.deepEqual(calls, ["ansi", "capture", "ocr", "submit:12345"])
   })
 
-  it("falls back to existing manual input when QA candidate is declined with 2", async () => {
+  it("falls back to existing manual input when QA candidate is declined with 0", async () => {
     const calls: string[] = []
-    const answers = ["2", "54321"]
+    const answers = ["0", "54321"]
     await handleQuickCaptcha({
       page: {
         captureCaptchaImage: async () => "cG5n",

@@ -48,33 +48,32 @@ async function ensureChrome(exeDirectory: string): Promise<void> {
 try {
   const exeDirectory = dirname(process.execPath)
   const terminal = createTerminal()
-  process.stdout.write(`KRAS Quick v${runtimeMeta.version}\n`)
+  process.stdout.write(`kras-quick v${runtimeMeta.version}\n`)
   process.stdout.write(`PDF 저장 경로: ${join(exeDirectory, "KRAS")}\n`)
-  let chromeChoice: "open" | "reuse" | "exit" = "exit"
+  let chromeChoice: "open" | "reuse" = "open"
   try {
     while (true) {
-      const answer = (await terminal.question("1. Chrome 열기 동의\n2. 이미 열려 있음, 다음 단계\n3. 종료\n선택 > ")).trim()
-      if (answer === "1") {
-        chromeChoice = "open"
-        break
-      }
-      if (answer === "2") {
+      const answer = (
+        await terminal.question(
+          "Chrome을 열까요?\n0: 아니오 (직접 Chrome을 열어 로그인한 뒤 그 페이지에서 계속)\nEnter: 예 (프로그램이 Chrome 열기)\n입력 > ",
+        )
+      ).trim()
+      if (answer === "0") {
         chromeChoice = "reuse"
         break
       }
-      if (answer === "3") break
-      process.stdout.write("1, 2 또는 3을 입력해 주세요.\n")
+      if (answer === "") {
+        chromeChoice = "open"
+        break
+      }
+      process.stdout.write("Enter(예) 또는 0(아니오)을 입력해 주세요.\n")
     }
   } finally {
     terminal.close()
   }
-  if (chromeChoice === "exit") {
-    process.stdout.write("사용자가 종료를 선택했습니다.\n")
-    process.exitCode = 0
-  } else {
   if (chromeChoice === "open") await ensureChrome(exeDirectory)
   if (chromeChoice === "reuse" && !(await cdpReady())) {
-    throw new Error(`기존 Chrome CDP 연결(${QUICK_CDP_PORT})을 찾지 못했습니다. 다시 실행해 1번을 선택하세요.`)
+    throw new Error(`기존 Chrome CDP 연결(${QUICK_CDP_PORT})을 찾지 못했습니다. 다시 실행해 Enter를 눌러 Chrome을 여세요.`)
   }
   const root = await ensureRuntime(runtimeMeta, process.env)
   const nodePath = join(root, "node", "node.exe")
@@ -87,7 +86,6 @@ try {
   )
   process.exitCode = exitCode
   if (exitCode !== 0) await runProcess("cmd.exe", ["/c", "pause"])
-  }
 } catch (error: unknown) {
   process.stderr.write(`kras_quick 실행 실패: ${error instanceof Error ? error.message : String(error)}\n`)
   await runProcess("cmd.exe", ["/c", "pause"])
