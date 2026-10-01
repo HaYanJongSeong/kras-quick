@@ -332,6 +332,7 @@ export async function lookupEvaluation(
     let complete = (): void => {
       throw new KrasEvaluationError("조회 완료 신호가 준비되지 않았습니다.")
     }
+    let emptyRequestInfoCalled = false
     const completion = new Promise<void>((resolve) => {
       complete = resolve
     })
@@ -345,6 +346,7 @@ export async function lookupEvaluation(
       }
     }
     certView.fnEmptyRequestInfo = function wrappedEmptyRequest(...args): unknown {
+      emptyRequestInfoCalled = true
       try {
         return originalEmptyRequest.apply(this, args)
       } finally {
@@ -378,7 +380,27 @@ export async function lookupEvaluation(
         .filter(
           ({ label, value }) =>
             value !== "" && label !== "" && label !== "선택" && label !== "선택사항없음",
-        )
+      )
+    }
+    const dismissNoParcelDialog = (): void => {
+      if (!emptyRequestInfoCalled) return
+      const visible = (element: Element): boolean => {
+        const html = element as HTMLElement
+        return html.offsetParent !== null
+      }
+      for (const dialog of Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"]'))) {
+        if (!visible(dialog)) continue
+        const ok = Array.from(
+          dialog.querySelectorAll<HTMLElement>('button,input[type="button"],input[type="submit"]'),
+        ).find((element) => {
+          const label = element instanceof HTMLInputElement ? element.value : element.textContent
+          return normalize(label) === "OK"
+        })
+        if (ok !== undefined) {
+          ok.click()
+          return
+        }
+      }
     }
     let previousFingerprint = ""
     let stableSince = Date.now()
@@ -409,7 +431,13 @@ export async function lookupEvaluation(
         (buildingOptions.length > 0 || emptyPlaceholder)
       ) {
         const hasBuilding = buildingOptions.length > 0
-        return { kind: "lookup", hasBuilding, buildingOptions }
+        dismissNoParcelDialog()
+        return {
+          kind: "lookup",
+          hasBuilding,
+          buildingOptions,
+          ...(emptyRequestInfoCalled ? { noParcel: true } : {}),
+        }
       }
       await new Promise((resolve) => window.setTimeout(resolve, 100))
     }
@@ -418,7 +446,13 @@ export async function lookupEvaluation(
       throw new KrasEvaluationError("건물구분 목록이 끝까지 로딩되지 않았습니다.")
     }
     const hasBuilding = buildingOptions.length > 0
-    return { kind: "lookup", hasBuilding, buildingOptions }
+    dismissNoParcelDialog()
+    return {
+      kind: "lookup",
+      hasBuilding,
+      buildingOptions,
+      ...(emptyRequestInfoCalled ? { noParcel: true } : {}),
+    }
   } catch (error) {
     if (error instanceof KrasEvaluationError) {
       return { kind: "evaluation_error", code: "KRAS_EVALUATION_ERROR" }

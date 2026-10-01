@@ -38,7 +38,7 @@ export type KrasWorkflowPage = {
   readonly renderCaptchaTerminal: () => Promise<string | null>
   readonly fillCaptchaAndSubmit: (
     captchaText: string,
-  ) => Promise<"success" | "need_lookup" | "error">
+  ) => Promise<"success" | "need_lookup" | "login_expired" | "error">
   readonly closeOzViewer: () => Promise<boolean>
   readonly disconnect?: () => Promise<void>
 }
@@ -48,6 +48,22 @@ export class KrasFloorRoomLoadTimeoutError extends Error {
     super("층-호명칭 목록 로딩 시간이 초과되었습니다.")
     this.name = "KrasFloorRoomLoadTimeoutError"
   }
+}
+
+export type KrasDialogKind = "confirm" | "need_lookup" | "login_expired" | "error"
+
+export function classifyKrasDialogText(text: string): KrasDialogKind | null {
+  if (text.includes("도면정보") || text.includes("도호가 불일치") || text.includes("출력축척"))
+    return "confirm"
+  if (text.includes("신청물건을 먼저 조회")) return "need_lookup"
+  if (text.includes("로그인이 만료되었습니다")) return "login_expired"
+  if (/보안문자|일치하지 않|오류|실패/.test(text)) return "error"
+  return null
+}
+
+export function isKrasLoginUrl(url: string): boolean {
+  if (!URL.canParse(url)) return false
+  return /\/login(?:\/|$)/i.test(new URL(url).pathname)
 }
 
 export type KrasWorkflowResult = {
@@ -67,7 +83,9 @@ export type KrasWorkflowHooks = {
   readonly chooseFloorRoom?: (
     options: readonly KrasBuildingOption[],
     building: KrasBuildingOption,
-  ) => Promise<number | undefined>
+  ) => Promise<number | "none" | undefined>
+  // chooseFloorRoom이 "none"을 반환하면 층-호를 선택하지 않고 진행한다 —
+  // 집합건물 총괄 열람에 사용한다. undefined(미반환)는 기존 의미(blocked)를 유지한다.
   readonly handleFloorRoomOptions?: (
     building: KrasBuildingOption,
     status: "empty" | "timeout",
@@ -229,11 +247,12 @@ function createPlaywrightPage(page: Page, disconnect: () => Promise<void>): Kras
             await new Promise(resolve => { img.onload = img.onerror = resolve })
           }
           const canvas = document.createElement("canvas")
-          canvas.width = img.naturalWidth
-          canvas.height = img.naturalHeight
+          canvas.width = img.naturalWidth * 2
+          canvas.height = img.naturalHeight * 2
           const ctx = canvas.getContext("2d")
           if (!ctx) return null
-          ctx.drawImage(img, 0, 0)
+          ctx.imageSmoothingEnabled = false
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
           return canvas.toDataURL("image/png").split(",")[1] || null
         })
       } catch {
@@ -268,6 +287,7 @@ function createPlaywrightPage(page: Page, disconnect: () => Promise<void>): Kras
     },
     fillCaptchaAndSubmit: async (captchaText: string) => {
       try {
+        if (isKrasLoginUrl(page.url())) return "login_expired"
         const captcha = page.locator("#captcha:visible")
         const viewButton = page.locator("button[onclick='certView.fnProcessCert();']:visible")
         const clickView = async (): Promise<boolean> => {
@@ -278,29 +298,19 @@ function createPlaywrightPage(page: Page, disconnect: () => Promise<void>): Kras
           return true
         }
         if (!(await clickView())) return "error"
-        // 열람 클릭 후 SweetAlert2가 뜬다. 세 가지로 구분한다:
-        // 1) "도면정보가 포함되어 있어 시간이 다소 소요될 수 있습니다" → 확인(swal2-confirm)을 눌러 정상 진행
-        // 2) "신청물건을 먼저 조회해 주세요" → 건물(ledger)이 선택되지 않은 상태 — 조회를 먼저 하도록 안내
-        // 3) 보안문자 오답 등 오류 → 닫고 실패를 반환해 재입력을 유도
         const deadline = Date.now() + 20_000
         while (Date.now() < deadline) {
+          if (isKrasLoginUrl(page.url())) return "login_expired"
           const dialog = await page
             .evaluate(() => {
               const el = document.querySelector(".swal2-container.swal2-backdrop-show")
               if (el === null) return null
-              const text = (el.textContent ?? "").replace(/\s+/g, " ").trim()
-              if (text.includes("도면정보")) return { kind: "confirm" as const, text }
-              if (text.includes("신청물건을 먼저 조회")) {
-                return { kind: "need_lookup" as const, text }
-              }
-              if (/보안문자|일치하지 않|오류|실패/.test(text)) {
-                return { kind: "error" as const, text }
-              }
-              return null
+              return (el.textContent ?? "").replace(/\s+/g, " ").trim()
             })
             .catch(() => null)
-          if (dialog === null) continue
-          if (dialog.kind === "need_lookup") {
+          const dialogKind = dialog === null ? null : classifyKrasDialogText(dialog)
+          if (dialogKind === null) continue
+          if (dialogKind === "need_lookup") {
             // ledger 미선택 — 이 dialog의 확인(OK) 버튼도 swal2-confirm이라 도면정보 확인과
             // 구분해야 한다. 닫고 호출자에게 "조회 필요"를 알려 수동 조회를 유도한다.
             await page
@@ -313,7 +323,18 @@ function createPlaywrightPage(page: Page, disconnect: () => Promise<void>): Kras
             await page.waitForTimeout(300)
             return "need_lookup"
           }
-          if (dialog.kind === "confirm") {
+          if (dialogKind === "login_expired") {
+            await page
+              .evaluate(() =>
+                document
+                  .querySelector<HTMLElement>('.swal2-container.swal2-backdrop-show .swal2-confirm')
+                  ?.click(),
+              )
+              .catch(() => undefined)
+            await page.waitForTimeout(300)
+            return "login_expired"
+          }
+          if (dialogKind === "confirm") {
             const confirmBtn = await page
               .waitForSelector(".swal2-container.swal2-backdrop-show .swal2-confirm", { timeout: 1000 })
               .catch(() => null)
@@ -327,7 +348,7 @@ function createPlaywrightPage(page: Page, disconnect: () => Promise<void>): Kras
               continue
             }
           }
-          if (dialog.kind === "error") {
+          if (dialogKind === "error") {
             await page
               .evaluate(() =>
                 document
@@ -340,7 +361,7 @@ function createPlaywrightPage(page: Page, disconnect: () => Promise<void>): Kras
         }
         return "error"
       } catch {
-        return "error"
+        return isKrasLoginUrl(page.url()) ? "login_expired" : "error"
       }
     },
     closeOzViewer: async () => {
@@ -369,12 +390,16 @@ export async function runKrasWorkflowWatcher(
   let lookup: KrasEvaluationResult
   if (hooks.reuseLoadedOptions === true) {
     // 조회 버튼을 다시 누르지 않고 현재 페이지에 로드된 건물 구분 옵션을 그대로 쓴다.
+    // 워크플로 완료 후 페이지 상태가 바뀌어 옵션이 비어 있으면 신선한 조회로 대체한다.
     const loadedOptions = await page.readBuildingOptions()
-    lookup = {
-      kind: "lookup",
-      hasBuilding: loadedOptions.length > 0,
-      buildingOptions: loadedOptions,
-    }
+    lookup =
+      loadedOptions.length > 0
+        ? {
+            kind: "lookup",
+            hasBuilding: true,
+            buildingOptions: loadedOptions,
+          }
+        : await page.lookup(address)
   } else {
     lookup = await page.lookup(address)
   }
@@ -411,7 +436,17 @@ export async function runKrasWorkflowWatcher(
   if (lookup.kind !== "lookup") throw new Error("Stage 1 조회 결과가 아닙니다.")
   const options = lookup.buildingOptions ?? []
   const stage1: KrasAutoStage1Result =
-    !lookup.hasBuilding || options.length === 0
+    lookup.noParcel === true
+      ? {
+          version: KRAS_AUTO_STAGE_VERSION,
+          stage: 1,
+          status: "blocked",
+          address: normalizeAddress(address),
+          reason: "no_parcel",
+          hasBuilding: false,
+          buildingOptions: [],
+        }
+      : !lookup.hasBuilding || options.length === 0
       ? {
           version: KRAS_AUTO_STAGE_VERSION,
           stage: 1,
@@ -496,9 +531,11 @@ export async function runKrasWorkflowWatcher(
       await (hooks.writeResult ?? writeKrasAutoStageResult)(paths.stage2Json, blocked)
       return { stage1, stage2: blocked, awaitingUser: true }
     }
-    floorRoom = floorRoomOptions.find(({ index }) => index === floorRoomIndex)
-    if (floorRoom === undefined) throw new Error("선택한 층-호명칭 번호가 유효하지 않습니다.")
-    await page.selectFloorRoom(floorRoom)
+    if (floorRoomIndex !== "none") {
+      floorRoom = floorRoomOptions.find(({ index }) => index === floorRoomIndex)
+      if (floorRoom === undefined) throw new Error("선택한 층-호명칭 번호가 유효하지 않습니다.")
+      await page.selectFloorRoom(floorRoom)
+    }
   }
   const stage2 = createKrasAutoStage2Result(stage1, building.index, floorRoom)
   await (hooks.writeResult ?? writeKrasAutoStageResult)(paths.stage2Json, stage2)

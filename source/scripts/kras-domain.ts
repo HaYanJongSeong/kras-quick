@@ -35,6 +35,7 @@ export type KrasEvaluationResult =
       readonly kind: "lookup"
       readonly hasBuilding: boolean
       readonly buildingOptions?: readonly KrasBuildingOption[]
+      readonly noParcel?: boolean
     }
   | { readonly kind: "fill_only" }
   | { readonly kind: "evaluation_error"; readonly code: typeof KRAS_EVALUATION_ERROR_CODE }

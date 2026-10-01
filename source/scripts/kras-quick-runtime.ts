@@ -1,7 +1,7 @@
 import { type SpawnOptions, spawn } from "node:child_process"
 import { createHash } from "node:crypto"
 import { existsSync } from "node:fs"
-import { mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises"
+import { copyFile, mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -111,6 +111,17 @@ export async function ensureRuntime(meta: RuntimeMeta, env: NodeJS.ProcessEnv): 
       zipReady = true
     } else {
       await rm(zipPath, { force: true })
+    }
+  }
+
+  if (!zipReady) {
+    const localZipPath = env["KRAS_QUICK_RUNTIME_PATH"]
+    if (localZipPath !== undefined && existsSync(localZipPath)) {
+      if ((await sha256File(localZipPath)).toLowerCase() !== expectedSha.toLowerCase()) {
+        throw new Error(`로컬 런타임 ZIP SHA-256 불일치: ${localZipPath}`)
+      }
+      await copyFile(localZipPath, zipPath)
+      zipReady = true
     }
   }
 

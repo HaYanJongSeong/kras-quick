@@ -128,6 +128,23 @@ describe("ensureRuntime", () => {
     )
   })
 
+  it("uses a verified local runtime ZIP before attempting network download", async (t: TestContext) => {
+    const dir = await mkdtemp(join(tmpdir(), "kras-quick-runtime-test-"))
+    t.after(() => rm(dir, { recursive: true, force: true }))
+    const zip = await makeRuntimeZip(dir)
+    const localZipPath = join(dir, "kras-quick-runtime.zip")
+    await writeFile(localZipPath, zip)
+    const cacheDir = join(dir, "cache")
+    const meta = {
+      version: VERSION,
+      url: "http://127.0.0.1:1/unreachable",
+      sha256: sha256Of(zip),
+    }
+    const result = await ensureRuntime(meta, makeEnv(cacheDir, { KRAS_QUICK_RUNTIME_PATH: localZipPath }))
+    assert.equal(result, join(cacheDir, EXTRACT_DIR))
+    assert.equal(await readFile(join(result, "node", "node.exe"), "utf8"), NODE_EXE)
+  })
+
   it("rejects on SHA-256 mismatch via env hash seam and leaves nothing cached", async (t: TestContext) => {
     const dir = await mkdtemp(join(tmpdir(), "kras-quick-runtime-test-"))
     t.after(() => rm(dir, { recursive: true, force: true }))

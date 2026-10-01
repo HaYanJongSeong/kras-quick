@@ -1,56 +1,37 @@
 ﻿<#
 .SYNOPSIS
-    kras-quick one-line installer. Downloads from GitHub Releases, verifies SHA-256, installs atomically, and runs.
+    kras-quick v2.0.2 one-line installer. Downloads EXE and runtime, verifies SHA-256, installs, and runs.
     Run: irm https://raw.githubusercontent.com/HaYanJongSeong/kras-quick/main/install.ps1 | iex
 #>
 $ErrorActionPreference = 'Stop'
-$e = [char]27
-function c([string]$code) { "$e[$($code)m" }
-$BOLD = c '1'; $DIM = c '2'; $RST = c '0'
-$CYAN = c '36'; $GRN = c '32'; $YEL = c '33'; $RED = c '31'; $BLU = c '34'
-function ok($m) { "${GRN}  OK${RST}  $m" }
-function step($m) { "${CYAN}  >>${RST}  $m" }
-function done($m) { "${GRN}  DONE${RST}  $m" }
-
-Write-Host ''
-Write-Host "${CYAN}${BOLD}  ╭──────────────────────────────────────╮${RST}"
-Write-Host "${CYAN}${BOLD}  │   KRAS-QUICK  ·  ONE-LINE INSTALLER   │${RST}"
-Write-Host "${CYAN}${BOLD}  ╰──────────────────────────────────────╯${RST}"
-Write-Host "${DIM}  version v1.1.5 · github.com/HaYanJongSeong/kras-quick${RST}"
-Write-Host ''
-
-$u = 'https://github.com/HaYanJongSeong/kras-quick/releases/download/v1.1.5/kras_quick_v1.1.5.exe'
-$d = "$env:USERPROFILE\Downloads"
-$tmp = "$d\.kras-quick.$([guid]::NewGuid().ToString('N')).tmp"
+$version = '2.0.2'
+$base = "https://github.com/HaYanJongSeong/kras-quick/releases/download/v$version"
+$d = Join-Path $env:USERPROFILE 'Downloads'
+$tmp = Join-Path $d ('.kras-quick.' + [guid]::NewGuid().ToString('N'))
 $exe = "$tmp.exe"
-$sum = "$tmp.sha256"
+$sum = "$tmp.exe.sha256"
+$runtime = "$tmp.runtime.zip"
+$runtimeSum = "$tmp.runtime.zip.sha256"
+New-Item -ItemType Directory -Force -Path $d | Out-Null
 try {
-    step "Downloading kras-quick (small launcher) ..."
-    Invoke-WebRequest $u -OutFile $exe
-    ok 'Downloaded'
+    Write-Host "Downloading kras-quick v$version..."
+    Invoke-WebRequest "$base/kras-quick.exe" -OutFile $exe
+    Invoke-WebRequest "$base/kras-quick.exe.sha256" -OutFile $sum
+    $expected = ((Get-Content $sum -Raw) -split '\s+')[0].ToUpperInvariant()
+    $actual = (Get-FileHash $exe -Algorithm SHA256).Hash.ToUpperInvariant()
+    if ($expected -ne $actual) { throw "SHA-256 mismatch for kras-quick.exe" }
 
-    step "Downloading SHA-256 checksum ..."
-    Invoke-WebRequest "$u.sha256" -OutFile $sum
-    ok 'Checksum fetched'
+    Write-Host 'Downloading runtime...'
+    Invoke-WebRequest "$base/kras-quick-runtime-v$version.zip" -OutFile $runtime
+    Invoke-WebRequest "$base/kras-quick-runtime-v$version.zip.sha256" -OutFile $runtimeSum
+    $expected = ((Get-Content $runtimeSum -Raw) -split '\s+')[0].ToUpperInvariant()
+    $actual = (Get-FileHash $runtime -Algorithm SHA256).Hash.ToUpperInvariant()
+    if ($expected -ne $actual) { throw "SHA-256 mismatch for runtime" }
 
-    step 'Verifying SHA-256 ...'
-    $h = ((Get-Content $sum -Raw) -split '\s+')[0]
-    $a = (Get-FileHash $exe -Algorithm SHA256).Hash
-    if ($h -ne $a) {
-        Write-Host "${RED}${BOLD}  ✗ SHA-256 MISMATCH${RST}${RED} — download corrupted, aborting.${RST}"
-        throw 'SHA-256 mismatch'
-    }
-    ok 'Checksum verified'
-
-    step 'Installing ...'
-    Move-Item $exe "$d\kras-quick.exe" -Force
-    done 'Installed to Downloads\kras-quick.exe'
+    Move-Item $exe (Join-Path $d 'kras-quick.exe') -Force
+    Move-Item $runtime (Join-Path $d "kras-quick-runtime-v$version.zip") -Force
+    Write-Host "Installed to $d"
+    Start-Process (Join-Path $d 'kras-quick.exe')
 } finally {
-    Remove-Item $exe, $sum -Force -ErrorAction SilentlyContinue
+    Remove-Item $exe, $sum, $runtime, $runtimeSum -Force -ErrorAction SilentlyContinue
 }
-
-Write-Host ''
-Write-Host "${GRN}${BOLD}  ✔ KRAS-QUICK READY${RST}"
-Write-Host "${DIM}  Launching ...${RST}"
-Write-Host ''
-Start-Process "$d\kras-quick.exe"

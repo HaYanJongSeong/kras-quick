@@ -1,19 +1,31 @@
 {
-  "name": "@hayanjongseong/kras-quick",
-  "version": "1.1.5",
-  "description": "KRAS Quick launcher for Windows",
-  "license": "MIT",
   "type": "module",
-  "bin": {
-    "kras-quick": "bin/kras-quick.js"
+  "scripts": {
+    "test:kras": "node --test tests/kras-auto-stages.test.ts tests/kras-pnu.test.ts tests/kras-workflow-watcher.test.ts tests/kras-excel-updater.test.ts tests/kras.test.ts tests/kras-dark.test.ts tests/kras-bridge.test.ts tests/kras-quick-runtime.test.ts tests/kras-tesseract.test.ts tests/property-auto-runner.test.ts",
+    "test:property": "node --test tests/property-address.test.ts tests/property-progress.test.ts tests/property-progress-windows.test.ts tests/property-watcher-page.test.ts tests/property-watcher-listener.test.ts tests/property-watcher-guidance-copy.test.ts tests/property-watcher-guidance-copy-fallback.test.ts tests/property-watcher-channel.test.ts tests/property-watcher-channel-navigation.test.ts tests/property-watcher-channel-fatal.test.ts tests/property-watcher-cdp.test.ts tests/property-watcher.test.ts tests/property-watcher-runtime.test.ts tests/property-watcher-process.test.ts tests/property-watcher-control.test.ts tests/property-watcher-state.test.ts tests/property-watcher-lifecycle.test.ts tests/property-watcher-runner.test.ts tests/property-watcher-runner-failure.test.ts tests/property-auto-runner.test.ts tests/property-auto-output.test.ts tests/terminal-reader.test.ts",
+    "test:all": "npm run test:kras && npm run test:property",
+    "typecheck:kras": "tsc --project tsconfig.kras.json",
+    "typecheck": "npm run typecheck:kras",
+    "lint:kras": "biome check scripts tests tools/kras.ts",
+    "lint": "npm run lint:kras",
+    "property:auto": "node scripts/property-auto-runner.ts",
+    "kras:quick": "node scripts/property-auto-runner.ts quick",
+    "watch:property": "node scripts/property-watcher-runner.ts watch",
+    "watch:property:dry-run": "node scripts/property-watcher-runner.ts dry_run",
+    "watch:property:start": "node scripts/property-watcher-runner.ts start",
+    "watch:property:status": "node scripts/property-watcher-runner.ts status",
+    "watch:property:stop": "node scripts/property-watcher-runner.ts stop"
   },
-  "files": [
-    "bin"
-  ],
-  "engines": {
-    "node": ">=18"
+  "dependencies": {
+    "@opencode-ai/plugin": "^1.18.4",
+    "exceljs": "^4.4.0",
+    "pdf-lib": "^1.17.1",
+    "playwright": "^1.61.1",
+    "zod": "4.1.8"
   },
-  "publishConfig": {
-    "access": "public"
+  "devDependencies": {
+    "@biomejs/biome": "2.5.4",
+    "@types/node": "26.1.1",
+    "typescript": "^7.0.2"
   }
 }

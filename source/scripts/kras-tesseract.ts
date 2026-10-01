@@ -45,6 +45,7 @@ export type TesseractOptions = {
   readonly timeoutMs?: number
   readonly tempRoot?: string
   readonly runner?: TesseractRunner
+  readonly attempt?: 1 | 2 | 3
 }
 
 export function bundledTesseractPath(execPath = process.execPath): string {
@@ -84,6 +85,7 @@ export async function recognizeCaptchaCandidate(
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const directory = await mkdtemp(join(options.tempRoot ?? tmpdir(), "kras-captcha-"))
   const inputPath = join(directory, "captcha.png")
+  const attempt = options.attempt ?? 1
   try {
     await writeFile(inputPath, Buffer.from(pngBase64, "base64"))
     const { stdout } = await (options.runner ?? runTesseract)(
@@ -94,9 +96,18 @@ export async function recognizeCaptchaCandidate(
         "-l",
         "eng",
         "--psm",
-        "7",
+        attempt === 1 ? "7" : attempt === 2 ? "8" : "13",
+        "--oem",
+        "1",
         "-c",
         "tessedit_char_whitelist=0123456789",
+        "-c",
+        "classify_bln_numeric_mode=1",
+        ...(attempt === 2
+          ? ["-c", "thresholding_method=2"]
+          : attempt === 3
+            ? ["-c", "thresholding_method=1", "-c", "invert_threshold=0.5"]
+            : []),
       ],
       {
         shell: false,

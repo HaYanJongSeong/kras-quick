@@ -75,14 +75,21 @@ try {
   if (chromeChoice === "reuse" && !(await cdpReady())) {
     throw new Error(`기존 Chrome CDP 연결(${QUICK_CDP_PORT})을 찾지 못했습니다. 다시 실행해 Enter를 눌러 Chrome을 여세요.`)
   }
-  const root = await ensureRuntime(runtimeMeta, process.env)
+  const runtimeZipPath = join(exeDirectory, `kras-quick-runtime-v${runtimeMeta.version}.zip`)
+  const runtimeEnv = {
+    ...process.env,
+    KRAS_CDP_ENDPOINT: QUICK_CDP_ENDPOINT,
+    KRAS_QUICK_ROOT: exeDirectory,
+    KRAS_QUICK_RUNTIME_PATH: runtimeZipPath,
+  }
+  const root = await ensureRuntime(runtimeMeta, runtimeEnv)
   const nodePath = join(root, "node", "node.exe")
   const scriptPath = join(root, "scripts", "property-auto-runner.ts")
   const exitCode = await runProcess(
     nodePath,
     [scriptPath, "quick", ...process.argv.slice(2)],
     root,
-    { ...process.env, KRAS_CDP_ENDPOINT: QUICK_CDP_ENDPOINT, KRAS_QUICK_ROOT: exeDirectory },
+    runtimeEnv,
   )
   process.exitCode = exitCode
   if (exitCode !== 0) await runProcess("cmd.exe", ["/c", "pause"])

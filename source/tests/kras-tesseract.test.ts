@@ -32,7 +32,19 @@ describe("recognizeCaptchaCandidate", () => {
     const runner: TesseractRunner = async (executable, args, options) => {
       assert.equal(executable, binaryPath)
       assert.equal(options.shell, false)
-      assert.deepEqual(args.slice(1), ["stdout", "-l", "eng", "--psm", "7", "-c", "tessedit_char_whitelist=0123456789"])
+      assert.equal(args[1], "stdout")
+      assert.deepEqual(args.slice(2), [
+        "-l",
+        "eng",
+        "--psm",
+        "7",
+        "--oem",
+        "1",
+         "-c",
+         "tessedit_char_whitelist=0123456789",
+         "-c",
+         "classify_bln_numeric_mode=1",
+      ])
       await access(args[0] ?? "")
       return { stdout: "12345\n", stderr: "" }
     }
@@ -44,7 +56,9 @@ describe("recognizeCaptchaCandidate", () => {
     const root = await withTempRoot(t)
     const outputs = ["1234", "123456", "12 345", "１２３４５", "abcde"]
     for (const stdout of outputs) {
-      const runner: TesseractRunner = async () => ({ stdout, stderr: "" })
+      const runner: TesseractRunner = async (_executable, _args) => {
+        return { stdout: `${stdout}\n`, stderr: "" }
+      }
       assert.equal(
         await recognizeCaptchaCandidate(PNG_BASE64, {
           binaryPath: join(root, "tesseract.exe"),
@@ -53,6 +67,21 @@ describe("recognizeCaptchaCandidate", () => {
         null,
       )
     }
+  })
+
+  it("accepts an exact five-digit candidate without confidence metadata", async (t) => {
+    const root = await withTempRoot(t)
+    const runner: TesseractRunner = async (_executable, _args) => {
+      return { stdout: "59464\n", stderr: "" }
+    }
+
+    assert.equal(
+      await recognizeCaptchaCandidate(PNG_BASE64, {
+        binaryPath: join(root, "tesseract.exe"),
+        runner,
+      }),
+      "59464",
+    )
   })
 
   it("reports a missing bundled binary before invoking OCR", async (t) => {

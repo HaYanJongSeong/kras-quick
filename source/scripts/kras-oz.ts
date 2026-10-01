@@ -6,6 +6,28 @@ import { chromium, type Page } from "playwright-core"
 import { isViewerUrl, type KrasOzViewerSurface } from "./kras-auto-stages.ts"
 
 const CDP_ENDPOINT = process.env["KRAS_CDP_ENDPOINT"] ?? "http://127.0.0.1:9222"
+export const OZ_CAPTURE_TIMEOUT_MS = 30_000
+
+export async function withOzTimeout<T>(
+  label: string,
+  operation: Promise<T>,
+  timeoutMs = OZ_CAPTURE_TIMEOUT_MS,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`${label} 시간 초과 (${timeoutMs / 1000}초)`)),
+          timeoutMs,
+        )
+      }),
+    ])
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
+  }
+}
 
 function visibleCaptchaSelector(page: Page): Promise<boolean> {
   return page
@@ -27,7 +49,7 @@ async function setOZZoomTo300(page: Page): Promise<void> {
   await page.waitForFunction(
     () => {
       const canvas = document.querySelector<HTMLCanvasElement>("canvas")
-      return canvas !== null && canvas.width > 3000
+      return canvas !== null && canvas.width > 0 && canvas.height > 0
     },
     { timeout: 15_000 },
   )
@@ -82,7 +104,10 @@ async function resetOZToFirstPage(page: Page): Promise<void> {
   }
 }
 
-async function captureOZPages(page: Page): Promise<readonly Uint8Array[]> {
+async function captureOZPages(
+  page: Page,
+  onProgress?: (completed: number, total: number) => void,
+): Promise<readonly Uint8Array[]> {
   await setOZZoomTo300(page)
   await resetOZToFirstPage(page)
   const total = await readOZTotalPages(page)
@@ -91,6 +116,7 @@ async function captureOZPages(page: Page): Promise<readonly Uint8Array[]> {
     const png = await captureStableCanvas(page)
     if (png === undefined) throw new Error(`${index}페이지 캔버스 캡처에 실패했습니다.`)
     pages.push(png)
+    onProgress?.(index, total)
     if (index < total) {
       await page.evaluate(() => {
         document.querySelector<HTMLElement>("input[title='한 페이지 다음으로 이동']")?.click()
@@ -120,7 +146,9 @@ function createSurface(page: Page, disconnect: () => Promise<void>): KrasOzViewe
   let capturedPngs: readonly Uint8Array[] | undefined
   const captureOnce = async (): Promise<readonly Uint8Array[]> => {
     if (capturedPngs !== undefined) return capturedPngs
-    const pngs = await captureOZPages(page)
+    const pngs = await captureOZPages(page, (completed, total) => {
+      process.stdout.write(`Stage 3: PNG 캡처 ${completed}/${total}페이지 완료\n`)
+    })
     capturedPngs = pngs
     return pngs
   }
