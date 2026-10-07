@@ -9,7 +9,11 @@
 - 새 EXE 시작 화면 확인
 - GitHub 온라인 설치와 SHA-256 확인 통과
 - npm 게시 인증 완료, `PUBLISH_OK 202` 수신
-- registry 반영과 일반 npm·npx 실행 검증은 대기 중. 자동 확인 작업 실행 중
+- registry `latest=2.0.3` 확인
+- registry의 npm 설치 후 EXE 다운로드·SHA-256 검증·2.0.3 시작 화면 확인
+- 일반 `npx --yes @hayanjongseong/kras-quick@latest`로 EXE 다운로드·SHA-256 검증·2.0.3 시작 화면 확인
+
+반영 직후에는 registry 메타데이터의 버전 목록과 dist-tag가 잠시 어긋나 `ETARGET`가 발생했다. `--prefer-online`으로 재조회한 뒤 정상 설치를 확인했다. npx 검사는 현재 폴더의 옛 EXE가 명령을 가리지 않도록 빈 임시 폴더에서 실행했다.
 
 ```text
 kras-quick.exe

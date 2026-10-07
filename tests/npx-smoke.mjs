@@ -7,6 +7,7 @@ import { spawn, spawnSync } from "node:child_process"
 
 const home = await mkdtemp(join(tmpdir(), "kras-npx-v203-"))
 const child = spawn("cmd.exe", ["/d", "/c", "npx --yes @hayanjongseong/kras-quick@latest"], {
+  cwd: home,
   env: { ...process.env, USERPROFILE: home },
   stdio: ["pipe", "pipe", "pipe"],
 })
