@@ -31,7 +31,7 @@ try {
   const bytes = await readFile(join(home, "Downloads", "kras-quick.exe"))
   const sum = await readFile(resolve("dist/kras-quick.exe.sha256"), "utf8")
   assert.equal(createHash("sha256").update(bytes).digest("hex").toUpperCase(), sum.split(/\s+/)[0])
-  assert.match(output, /kras-quick v2\.0\.2/)
+  assert.match(output, /kras-quick v2\.0\.3/)
   console.log("PASS: installed npm command downloads verified EXE and reaches Chrome prompt")
 } finally {
   // 이 테스트가 띄운 명령과 EXE만 종료한다. Chrome은 시작하지 않았다.

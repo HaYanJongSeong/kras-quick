@@ -11,7 +11,7 @@ const meta = JSON.parse(await readFile(new URL("../kras-quick-runtime.meta.json"
 const root = await ensureRuntime(meta, {
   ...process.env,
   KRAS_QUICK_CACHE_DIR: cache,
-  KRAS_QUICK_RUNTIME_PATH: resolve("dist/kras-quick-runtime-v2.0.2.zip"),
+  KRAS_QUICK_RUNTIME_PATH: resolve("dist/kras-quick-runtime-v2.0.3.zip"),
 })
 const node = join(root, "node", "node.exe")
 const script = join(root, "scripts", "property-auto-runner.ts")
@@ -38,5 +38,5 @@ const ready = await new Promise((resolveReady, reject) => {
 })
 exe.kill()
 assert.equal(ready, true, output)
-assert.match(output, /kras-quick v2\.0\.2/)
+assert.match(output, /kras-quick v2\.0\.3/)
 console.log("PASS: EXE starts and reaches the Chrome prompt; no KRAS query submitted")

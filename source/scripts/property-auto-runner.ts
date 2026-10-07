@@ -1,4 +1,4 @@
-﻿import { execFile, spawn } from "node:child_process"
+import { execFile, spawn } from "node:child_process"
 import { existsSync } from "node:fs"
 import { readFile } from "node:fs/promises"
 import { dirname, join } from "node:path"
@@ -53,7 +53,7 @@ const watcherRunnerPath = join(
   "property-watcher-runner.ts",
 )
 
-export const KRAS_QUICK_VERSION = "2.0.2"
+export const KRAS_QUICK_VERSION = "2.0.3"
 
 export const QUICK_ADDRESS_PROMPT =
   "\n주소 입력 또는 작업 선택\n-: 기본 주소(서울특별시 노원구 월계동 392-19)\n주소: 새 주소 조회\n.: 이 주소의 건물 목록으로 돌아가기\n..: 이 건물의 층-호수로 돌아가기 (집합건물일 때만)\n*: 주소 입력 화면으로 돌아오기\n0: OZ 뷰어 수동 열람 (직전 주소 저장)\nEnter: 종료\n+: 클립보드 붙여넣기 (입력 후 Enter)\n입력 > "

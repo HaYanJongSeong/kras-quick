@@ -1,6 +1,6 @@
 {
   "name": "@hayanjongseong/kras-quick",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "description": "KRAS Quick Windows launcher",
   "type": "module",
   "bin": { "kras-quick": "bin/kras-quick.js" },
