@@ -12,6 +12,8 @@
 - registry `latest=2.0.3` 확인
 - registry의 npm 설치 후 EXE 다운로드·SHA-256 검증·2.0.3 시작 화면 확인
 - 일반 `npx --yes @hayanjongseong/kras-quick@latest`로 EXE 다운로드·SHA-256 검증·2.0.3 시작 화면 확인
+- npm 설치본과 npx를 각각 별도 임시 사용자 폴더에서 실행했다. 실제 테스트 Chrome의 CDP 연결, runtime 다운로드·압축 해제·해시 확인, 자식 런타임의 KRAS 로그인 안내, Tesseract 실행까지 모두 통과했다. 로그인이나 필지 조회는 제출하지 않았다.
+- 실행 증거: `C:\Users\admin\AppData\Local\Temp\kras-npm-runtime-oobSwg\execution.json`, `C:\Users\admin\AppData\Local\Temp\kras-npx-runtime-HUKraq\execution.json`
 
 반영 직후에는 registry 메타데이터의 버전 목록과 dist-tag가 잠시 어긋나 `ETARGET`가 발생했다. `--prefer-online`으로 재조회한 뒤 정상 설치를 확인했다. npx 검사는 현재 폴더의 옛 EXE가 명령을 가리지 않도록 빈 임시 폴더에서 실행했다.
 
