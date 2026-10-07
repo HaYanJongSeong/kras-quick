@@ -1,6 +1,7 @@
 # Creates a small kras-quick launcher plus an external runtime ZIP. Chrome remains external.
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$source = Join-Path $root "source"
 $runtime = Join-Path $root "dist\kras-quick"
 $staging = Join-Path $env:TEMP "kras-quick-runtime"
 $version = "2.0.2"
@@ -33,7 +34,7 @@ $payloadScripts = @(
     "property-watcher-start.ts", "property-watcher-state.ts", "terminal-reader.ts"
 )
 foreach ($name in $payloadScripts) {
-    Copy-Item (Join-Path $root "scripts\$name") (Join-Path $staging "scripts")
+    Copy-Item (Join-Path $source "scripts\$name") (Join-Path $staging "scripts")
 }
 $tesseractSource = "C:\Program Files\Tesseract-OCR"
 $tesseractTarget = Join-Path $staging "tesseract"
@@ -77,7 +78,7 @@ $meta = [ordered]@{
 Write-Host "Runtime ZIP: $payload"
 Write-Host "Runtime SHA-256: $runtimeSha256"
 
-  bun build --compile --target=bun-windows-x64 (Join-Path $root "scripts\kras-quick-launcher.ts") --outfile $output --windows-icon (Join-Path $root "kras-quick.ico") --windows-title "KRAS Quick" --windows-publisher "HaYanJongSeong" --windows-version "2.0.2.0" --windows-description "KRAS certificate one-line installer and OZ viewer capture" --windows-copyright "Copyright (c) 2026 HaYanJongSeong"
+  bun build --compile --target=bun-windows-x64 (Join-Path $source "scripts\kras-quick-launcher.ts") --outfile $output --windows-icon (Join-Path $root "kras-quick.ico") --windows-title "KRAS Quick" --windows-publisher "HaYanJongSeong" --windows-version "2.0.2.0" --windows-description "KRAS certificate one-line installer and OZ viewer capture" --windows-copyright "Copyright (c) 2026 HaYanJongSeong"
 if ($LASTEXITCODE -ne 0) { throw "single EXE build failed" }
 
 Remove-Item -Recurse -Force $staging

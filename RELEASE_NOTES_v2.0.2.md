@@ -26,5 +26,21 @@
 
 ## 검증
 
-- `npm run test:property`: 177 passed
-- KRAS 관련 기능 테스트: 96 passed, 기존 `tools/kras.ts` 누락 테스트 2건 제외
+- `npm run test:property`: 177건 통과
+- `npm run test:kras`: 144건 통과
+- `npm run typecheck`: 통과
+- 설치 테스트: 체크섬 불일치 차단, 버전이 포함된 runtime ZIP 설치, 기존 프로필 보존 확인
+- EXE 시작 화면, 런타임 압축 해제·모듈 로딩, Tesseract 실행·캐시 재사용 확인
+
+## 같은 버전 수정본 (2026-10-07)
+
+버전은 `2.0.2`로 유지했습니다. AUTO 일시정지·재개에서 터미널 인자가 빠진 오류, npm 실행기의 다운로드 파일명, GitHub 소스 빌드 경로를 고쳤습니다. 수정 EXE와 runtime ZIP은 아래 첨부 파일로 다시 받으세요.
+
+npm registry의 기존 `2.0.2`는 덮어쓸 수 없습니다. npm을 쓰려면 GitHub 수정본을 설치하세요.
+
+```powershell
+npm install -g https://github.com/HaYanJongSeong/kras-quick/archive/refs/heads/main.tar.gz
+kras-quick
+```
+
+실제 로그인 계정으로 KRAS 조회부터 OZ PDF 저장까지 하는 현장 검증은 아직 하지 않았습니다.

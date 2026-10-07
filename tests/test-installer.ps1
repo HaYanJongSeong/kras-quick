@@ -102,8 +102,8 @@ try {
     & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -StagingDir $stage6 -InstallDir $app6
     Assert-True ($LASTEXITCODE -eq 0) "staged install with runtime zip exits 0"
     $zipSrc6 = Join-Path $stage6 "kras-quick-runtime-v9.9.9.zip"
-    Assert-True (Test-Path -LiteralPath (Join-Path $app6 "kras-quick-runtime.zip")) "runtime zip installed"
-    Assert-True ((Get-FileHash -LiteralPath (Join-Path $app6 "kras-quick-runtime.zip") -Algorithm SHA256).Hash -eq (Get-FileHash -LiteralPath $zipSrc6 -Algorithm SHA256).Hash) "installed runtime zip bytes match asset"
+    Assert-True (Test-Path -LiteralPath (Join-Path $app6 "kras-quick-runtime-v9.9.9.zip")) "versioned runtime zip installed"
+    Assert-True ((Get-FileHash -LiteralPath (Join-Path $app6 "kras-quick-runtime-v9.9.9.zip") -Algorithm SHA256).Hash -eq (Get-FileHash -LiteralPath $zipSrc6 -Algorithm SHA256).Hash) "installed runtime zip bytes match asset"
 
     # --- 7. checksum pairing: two .sha256 assets present; EXE still verifies against its own ---
     # (wildcard-first selection could pick the runtime checksum for the EXE; exact-name

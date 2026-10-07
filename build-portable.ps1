@@ -2,6 +2,7 @@
 # 사용법: powershell -File build-portable.ps1
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$source = Join-Path $root "source"
 $dist = Join-Path $root "dist\kras-quick"
 $nodeZip = Join-Path $env:TEMP "node-portable.zip"
 $nodeDir = Join-Path $env:TEMP "node-portable-extract"
@@ -13,8 +14,8 @@ New-Item -ItemType Directory -Force -Path (Join-Path $dist "node") | Out-Null
 
 # 2. 파일 복사
 Copy-Item (Join-Path $root "quick.bat") (Join-Path $dist "quick.bat")
-Copy-Item (Join-Path $root "package.json") (Join-Path $dist "package.json")
-Get-ChildItem (Join-Path $root "scripts\*.ts") | Copy-Item -Destination (Join-Path $dist "scripts")
+Copy-Item (Join-Path $source "package.json") (Join-Path $dist "package.json")
+Get-ChildItem (Join-Path $source "scripts\*.ts") | Copy-Item -Destination (Join-Path $dist "scripts")
 $tesseractSource = "C:\Program Files\Tesseract-OCR"
 $tesseractTarget = Join-Path $dist "tesseract"
 if (-not (Test-Path (Join-Path $tesseractSource "tesseract.exe"))) {

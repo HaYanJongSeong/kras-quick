@@ -67,7 +67,9 @@ try {
         $gh = Get-GhExe
         & $gh auth status *> $null
         if ($LASTEXITCODE -ne 0) { throw "gh is not authenticated. Run 'gh auth login' first (token stays in gh's own store, never in args/env)." }
-        & $gh release download $Version --repo $Repo --pattern "*.exe" --pattern "*.sha256" --dir $tmp
+        $tagArgs = @()
+        if ($Version -ne "latest") { $tagArgs = @($Version) }
+        & $gh release download @tagArgs --repo $Repo --pattern "*.exe" --pattern "*.sha256" --dir $tmp
         if ($LASTEXITCODE -ne 0) { throw "gh release download failed (exit $LASTEXITCODE)." }
         $exe = Get-ChildItem -LiteralPath $tmp -Filter *.exe -File | Select-Object -First 1
         if (-not $exe) { throw "Release $Version has no exe asset." }
@@ -76,7 +78,7 @@ try {
         # Runtime zip is optional: fetch it only when the release ships its checksum.
         $zip = $null; $zipSha = $null
         if (Get-ChildItem -LiteralPath $tmp -Filter *.zip.sha256 -File | Select-Object -First 1) {
-            & $gh release download $Version --repo $Repo --pattern "*.zip" --dir $tmp
+            & $gh release download @tagArgs --repo $Repo --pattern "*.zip" --dir $tmp
             if ($LASTEXITCODE -ne 0) { throw "gh release download (runtime zip) failed (exit $LASTEXITCODE)." }
             $zip = Get-ChildItem -LiteralPath $tmp -Filter *.zip -File | Select-Object -First 1
             if (-not $zip) { throw "Release $Version runtime zip missing." }
@@ -111,11 +113,11 @@ try {
 
     Write-Host "Installed kras-quick.exe -> $target"
     if ($zip) {
-        $zipTarget = Join-Path $InstallDir "kras-quick-runtime.zip"
+        $zipTarget = Join-Path $InstallDir $zip.Name
         $tmpZipTarget = Join-Path $InstallDir ("kras-quick-runtime.zip." + [guid]::NewGuid().ToString("N") + ".tmp")
         Copy-Item -LiteralPath $zip.FullName -Destination $tmpZipTarget -Force
         Move-Item -LiteralPath $tmpZipTarget -Destination $zipTarget -Force
-        Write-Host "Installed kras-quick-runtime.zip -> $zipTarget"
+        Write-Host "Installed $($zip.Name) -> $zipTarget"
     }
     exit 0
 } catch {

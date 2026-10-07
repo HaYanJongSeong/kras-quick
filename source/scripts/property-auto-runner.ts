@@ -1650,7 +1650,7 @@ async function main(): Promise<void> {
               autoPaused = false
               autoMode = false
               process.stdout.write("재개할 주소가 없습니다. AUTO를 종료합니다.\n")
-              address = await readQuickAddress(quickAddressPrompt)
+              address = await readQuickAddress(terminal, quickAddressPrompt)
               continue
             }
             autoPaused = false
@@ -1884,7 +1884,7 @@ async function main(): Promise<void> {
             process.stdout.write(
               `AUTO 일시정지. 현재 주소 완료. 대기 주소 ${pendingAutoQueue.length}건. '재개' 입력 시 계속합니다.\n`,
             )
-            address = await readQuickAddress(autoAddressPrompt)
+            address = await readQuickAddress(terminal, autoAddressPrompt)
             continue
           }
           if (batchRunning && pendingAutoQueue.length > 0) {

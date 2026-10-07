@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process"
 import { existsSync } from "node:fs"
 import { dirname, join } from "node:path"
-import runtimeMeta from "../kras-quick-runtime.meta.json" with { type: "json" }
+import runtimeMeta from "../../kras-quick-runtime.meta.json" with { type: "json" }
 import { ensureRuntime, runProcess } from "./kras-quick-runtime.ts"
 import { createTerminal } from "./terminal-reader.ts"
 

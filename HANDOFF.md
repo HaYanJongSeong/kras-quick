@@ -1,6 +1,6 @@
 # KRAS Quick Handoff
 
-작성일: 2026-10-01
+작성일: 2026-10-07
 
 ## 현재 상태
 
@@ -13,11 +13,17 @@
 
 ## 검증
 
-- `kras-workflow-watcher` 테스트: `20/20` 통과
+- KRAS 테스트 144건, property 테스트 177건 통과
 - `build-portable.ps1` 통과
 - `build-single-exe.ps1` 통과
 - Archify showcase validation, deliver, visual-check 통과
-- 전체 typecheck는 기존 `tools/kras.ts` 누락으로 실패
+- 전체 typecheck 통과. 누락된 `tools/kras.ts` 복원, 터미널 인자 누락 수정
+- 설치 테스트, runtime 모듈 로딩, Tesseract 실행, EXE 시작 화면 확인
+- 실제 KRAS 로그인·조회·OZ PDF 저장은 미검증
+
+## npm 배포 주의
+
+npm registry의 `2.0.2`에는 BOM·다운로드 파일명 오류가 남아 있다. 같은 버전을 덮어쓸 수 없으며, 사용자 요청에 따라 버전은 올리지 않았다. README의 GitHub tar.gz 설치 명령으로 수정본을 설치한다.
 
 ## 배포 파일
 
