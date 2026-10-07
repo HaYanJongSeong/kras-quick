@@ -12,6 +12,7 @@ const child = spawn("cmd.exe", ["/d", "/c", command], {
   env: { ...process.env, USERPROFILE: home },
   stdio: ["pipe", "pipe", "pipe"],
 })
+child.stdin.end("0\n")
 let output = ""
 let errors = ""
 child.stderr.on("data", (data) => { errors += data.toString("utf8") })

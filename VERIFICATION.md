@@ -1,4 +1,27 @@
-# 2.0.2 수정본 검증
+# 배포 검증 기록
+
+## 2.0.3 (2026-10-07)
+
+사용자 승인으로 전체 버전을 `2.0.3`으로 올렸다. GitHub Release와 Downloads는 반영했다.
+
+- 기능 테스트 321건, 실행기 검사, 타입 검사 통과
+- 새 runtime 압축 해제·전체 import·Tesseract 실행·캐시 재사용 통과
+- 새 EXE 시작 화면 확인
+- GitHub 온라인 설치와 SHA-256 확인 통과
+- npm 게시 인증 완료, `PUBLISH_OK 202` 수신
+- registry 반영과 일반 npm·npx 실행 검증은 대기 중. 자동 확인 작업 실행 중
+
+```text
+kras-quick.exe
+50D50219D1B91D0F61553EA5A204425836BBB51EB09F283BCC272132247E6A64
+
+kras-quick-runtime-v2.0.3.zip
+C85CBBAFE13BA90F1D3327C31524507DA8232619FE09D800C666F5BFAB1E9D62
+```
+
+아래는 이전 `2.0.2` 수정본의 기록이다.
+
+## 2.0.2 수정본 검증
 
 검증일: 2026-10-07. 버전과 Release 태그는 그대로 유지했다.
 

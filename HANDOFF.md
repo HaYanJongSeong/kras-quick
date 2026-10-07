@@ -23,13 +23,13 @@
 
 ## npm 배포 주의
 
-npm registry의 `2.0.2`에는 BOM·다운로드 파일명 오류가 남아 있다. 같은 버전을 덮어쓸 수 없으며, 사용자 요청에 따라 버전은 올리지 않았다. README의 GitHub tar.gz 설치 명령으로 수정본을 설치한다.
+npm registry의 `2.0.2`에는 다운로드 파일명 오류가 남아 있다. 이후 사용자 승인으로 전체 버전을 `2.0.3`으로 올렸다. `2.0.3` 게시 인증은 완료했고 `PUBLISH_OK 202`를 받았으며, registry 반영 후 일반 npm·npx 명령을 검사하는 작업이 실행 중이다.
 
 ## 배포 파일
 
-- `C:\Users\admin\Downloads\kras-quick.exe` (v2.0.2)
-- `C:\Users\admin\Downloads\kras-quick-runtime-v2.0.2.zip`
-- GitHub Release: `https://github.com/HaYanJongSeong/kras-quick/releases/tag/v2.0.2`
+- `C:\Users\admin\Downloads\kras-quick.exe` (v2.0.3)
+- `C:\Users\admin\Downloads\kras-quick-runtime-v2.0.3.zip`
+- GitHub Release: `https://github.com/HaYanJongSeong/kras-quick/releases/tag/v2.0.3`
 
 실행 중인 EXE는 종료한 뒤 교체한다.
 
