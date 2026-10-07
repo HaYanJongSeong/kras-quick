@@ -60,6 +60,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build-portable.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build-single-exe.ps1
 ```
 
+## 검증
+
+수정본의 검증 결과와 아직 확인하지 못한 항목은 [VERIFICATION.md](VERIFICATION.md)에 기록했습니다.
+
 ## 라이선스
 
 [MIT](LICENSE)
