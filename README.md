@@ -1,16 +1,16 @@
-﻿# KRAS Quick v2.0.2
+# KRAS Quick v2.0.2
 
 KRAS/OZ 토지·건축물 조회 자동화 도구입니다.
 
 ## GitHub 설치
 
-PowerShell에서 한 줄만 실행합니다. `git`, `gh`, Node.js가 필요 없습니다.
+PowerShell에 아래 명령을 붙여 넣으면 설치가 시작됩니다. `git`, `gh`, Node.js는 따로 설치하지 않아도 됩니다.
 
 ```powershell
 irm https://raw.githubusercontent.com/HaYanJongSeong/kras-quick/main/install.ps1 | iex
 ```
 
-설치 스크립트가 GitHub Release `v2.0.2`에서 EXE와 runtime ZIP을 다운로드하고, 각 파일의 SHA-256을 검증한 뒤 `Downloads\kras-quick.exe`를 설치·실행합니다.
+설치 스크립트는 GitHub Release `v2.0.2`에서 EXE와 runtime ZIP을 받습니다. 각 파일의 SHA-256을 확인한 뒤 `Downloads\kras-quick.exe`를 설치하고 실행합니다.
 
 ## 수동 설치
 
@@ -21,7 +21,7 @@ kras-quick.exe
 kras-quick-runtime-v2.0.2.zip
 ```
 
-그 뒤 `kras-quick.exe`를 실행합니다.
+두 파일을 받은 뒤 `kras-quick.exe`를 실행하세요.
 
 ## 요구 사항
 
@@ -29,7 +29,7 @@ kras-quick-runtime-v2.0.2.zip
 - Google Chrome
 - 인터넷 연결(최초 runtime 다운로드 또는 KRAS 조회)
 
-Chrome은 실행 시 CDP 모드로 자동 시작합니다. 기존 Chrome 프로필은 종료하지 않습니다.
+프로그램을 실행하면 Chrome이 CDP 모드로 열립니다. 기존 Chrome 프로필은 종료하지 않습니다.
 
 ## 개발
 
@@ -40,7 +40,7 @@ npm run test:kras
 npm run typecheck
 ```
 
-직접 빌드하려면 `C:\Program Files\Tesseract-OCR`에 Tesseract를 설치한 뒤 실행합니다.
+직접 빌드할 때는 `C:\Program Files\Tesseract-OCR`에 Tesseract를 설치하고 아래 명령을 실행하세요.
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build-portable.ps1

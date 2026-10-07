@@ -1,8 +1,8 @@
-# KRAS Quick Source
+# KRAS Quick 소스
 
-This directory contains source files used to build the KRAS Quick runtime.
+KRAS Quick 런타임을 빌드할 때 쓰는 소스를 모아 둔 폴더입니다.
 
-- `scripts/`: KRAS workflow, OZ Viewer, stage handling, and terminal source
-- `tests/`: stage and artifact tests
+- `scripts/`: KRAS 작업 흐름, OZ Viewer, 단계 처리, 터미널 소스
+- `tests/`: 단계 처리와 결과 파일 테스트
 
-The launcher and runtime packaging files remain at repository root. Runtime source is published separately from the compiled launcher executable.
+실행기와 런타임 패키징 파일은 저장소 루트에 있습니다. 런타임 소스와 컴파일된 실행기 EXE는 별도로 공개합니다.
