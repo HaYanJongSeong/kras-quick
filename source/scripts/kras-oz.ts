@@ -1,224 +1,285 @@
-import { createHash } from "node:crypto"
+import { createHash } from "node:crypto";
 
-import { PDFDocument } from "pdf-lib"
-import { chromium, type Page } from "playwright-core"
+import { PDFDocument } from "pdf-lib";
+import type { Page } from "playwright-core";
+import { isViewerUrl, type KrasOzViewerSurface } from "./kras-auto-stages.ts";
+import { acquireKrasBrowser } from "./kras-browser.ts";
 
-import { isViewerUrl, type KrasOzViewerSurface } from "./kras-auto-stages.ts"
-
-const CDP_ENDPOINT = process.env["KRAS_CDP_ENDPOINT"] ?? "http://127.0.0.1:9222"
-export const OZ_CAPTURE_TIMEOUT_MS = 30_000
+export const OZ_CAPTURE_TIMEOUT_MS = 30_000;
 
 export async function withOzTimeout<T>(
-  label: string,
-  operation: Promise<T>,
-  timeoutMs = OZ_CAPTURE_TIMEOUT_MS,
+	label: string,
+	operation: Promise<T>,
+	timeoutMs = OZ_CAPTURE_TIMEOUT_MS,
 ): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  try {
-    return await Promise.race([
-      operation,
-      new Promise<T>((_, reject) => {
-        timer = setTimeout(
-          () => reject(new Error(`${label} 시간 초과 (${timeoutMs / 1000}초)`)),
-          timeoutMs,
-        )
-      }),
-    ])
-  } finally {
-    if (timer !== undefined) clearTimeout(timer)
-  }
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	try {
+		return await Promise.race([
+			operation,
+			new Promise<T>((_, reject) => {
+				timer = setTimeout(
+					() => reject(new Error(`${label} 시간 초과 (${timeoutMs / 1000}초)`)),
+					timeoutMs,
+				);
+			}),
+		]);
+	} finally {
+		if (timer !== undefined) clearTimeout(timer);
+	}
 }
 
 function visibleCaptchaSelector(page: Page): Promise<boolean> {
-  return page
-    .locator(
-      "input[id*='captcha' i], input[name*='captcha' i], textarea[id*='captcha' i], textarea[name*='captcha' i]",
-    )
-    .first()
-    .isVisible()
+	return page
+		.locator(
+			"input[id*='captcha' i], input[name*='captcha' i], textarea[id*='captcha' i], textarea[name*='captcha' i]",
+		)
+		.first()
+		.isVisible();
 }
 
 // OZ Viewer HTML5 툴바 셀렉터는 라이브 report.jsp 실측값. 버튼은 title 속성으로 선택한다(클래스 btnNEXT/btnNEXT2가 뷰어 상태에 따라 바뀜)
 async function setOZZoomTo300(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const select = document.querySelector<HTMLSelectElement>("select.oz_ui_layout")
-    if (select === null) return
-    select.value = "300%"
-    select.dispatchEvent(new Event("change", { bubbles: true }))
-  })
-  await page.waitForFunction(
-    () => {
-      const canvas = document.querySelector<HTMLCanvasElement>("canvas")
-      return canvas !== null && canvas.width > 0 && canvas.height > 0
-    },
-    { timeout: 15_000 },
-  )
+	await page.evaluate(() => {
+		const select = document.querySelector<HTMLSelectElement>(
+			"select.oz_ui_layout",
+		);
+		if (select === null) return;
+		select.value = "300%";
+		select.dispatchEvent(new Event("change", { bubbles: true }));
+	});
+	await page.waitForFunction(
+		() => {
+			const canvas = document.querySelector<HTMLCanvasElement>("canvas");
+			return canvas !== null && canvas.width > 0 && canvas.height > 0;
+		},
+		undefined,
+		{ timeout: 15_000 },
+	);
 }
 
 async function readOZTotalPages(page: Page): Promise<number> {
-  const total = Number(
-    await page.evaluate(() => {
-      const match = (document.body.innerText ?? "").match(/(\d+)\s*\/\s*(\d+)/)
-      return match?.[2] ?? "0"
-    }),
-  )
-  if (!Number.isSafeInteger(total) || total <= 0) throw new Error("OZ 뷰어 총 페이지 수를 읽지 못했습니다.")
-  return total
+	const total = Number(
+		await page.evaluate(() => {
+			const match = (document.body.innerText ?? "").match(/(\d+)\s*\/\s*(\d+)/);
+			return match?.[2] ?? "0";
+		}),
+	);
+	if (!Number.isSafeInteger(total) || total <= 0)
+		throw new Error("OZ 뷰어 총 페이지 수를 읽지 못했습니다.");
+	return total;
 }
 
-async function captureStableCanvas(page: Page): Promise<Uint8Array | undefined> {
-  const capture = (): Promise<Uint8Array | undefined> =>
-    page.evaluate(async () => {
-      const canvas = document.querySelector<HTMLCanvasElement>("canvas")
-      if (canvas === null) return undefined
-      const blob = await new Promise<Blob | undefined>((resolve) =>
-        canvas.toBlob((value) => resolve(value ?? undefined), "image/png"),
-      )
-      return blob === undefined ? undefined : new Uint8Array(await blob.arrayBuffer())
-    })
-  let previous: Uint8Array | undefined
-  let previousFingerprint = ""
-  for (let attempt = 0; attempt < 40; attempt += 1) {
-    const current = await capture()
-    if (current !== undefined) {
-      const fingerprint = createHash("sha1").update(current).digest("hex")
-      if (previousFingerprint === fingerprint) return current
-      previousFingerprint = fingerprint
-      previous = current
-    }
-    await new Promise((resolve) => setTimeout(resolve, 300))
-  }
-  return previous
+async function captureStableCanvas(
+	page: Page,
+): Promise<Uint8Array | undefined> {
+	const capture = (): Promise<Uint8Array | undefined> =>
+		page.evaluate(async () => {
+			const canvas = document.querySelector<HTMLCanvasElement>("canvas");
+			if (canvas === null) return undefined;
+			const blob = await new Promise<Blob | undefined>((resolve) =>
+				canvas.toBlob((value) => resolve(value ?? undefined), "image/png"),
+			);
+			return blob === undefined
+				? undefined
+				: new Uint8Array(await blob.arrayBuffer());
+		});
+	let previous: Uint8Array | undefined;
+	let previousFingerprint = "";
+	for (let attempt = 0; attempt < 40; attempt += 1) {
+		const current = await capture();
+		if (current !== undefined) {
+			const fingerprint = createHash("sha1").update(current).digest("hex");
+			if (previousFingerprint === fingerprint) return current;
+			previousFingerprint = fingerprint;
+			previous = current;
+		}
+		await new Promise((resolve) => setTimeout(resolve, 300));
+	}
+	return previous;
 }
 
 async function resetOZToFirstPage(page: Page): Promise<void> {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    const current = await page.evaluate(
-      () => document.querySelector<HTMLInputElement>("input[title='현재 페이지']")?.value ?? "",
-    )
-    if (current === "1" || current === "") return
-    await page.evaluate(() => {
-      document.querySelector<HTMLElement>("input[title='한 페이지 전으로 이동']")?.click()
-    })
-    await new Promise((resolve) => setTimeout(resolve, 500))
-  }
+	for (let attempt = 0; attempt < 50; attempt += 1) {
+		const current = await page.evaluate(
+			() =>
+				document.querySelector<HTMLInputElement>(
+					"input[title='현재 페이지'], input[title='Current page']",
+				)?.value ?? "",
+		);
+		if (current === "1" || current === "") return;
+		await page.evaluate(() => {
+			document
+				.querySelector<HTMLElement>(
+					"input[title='한 페이지 전으로 이동'], input[title='Move to the previous page']",
+				)
+				?.click();
+		});
+		await new Promise((resolve) => setTimeout(resolve, 500));
+	}
 }
 
 async function captureOZPages(
-  page: Page,
-  onProgress?: (completed: number, total: number) => void,
+	page: Page,
+	onProgress?: (completed: number, total: number) => void,
 ): Promise<readonly Uint8Array[]> {
-  await setOZZoomTo300(page)
-  await resetOZToFirstPage(page)
-  const total = await readOZTotalPages(page)
-  const pages: Uint8Array[] = []
-  for (let index = 1; index <= total; index += 1) {
-    const png = await captureStableCanvas(page)
-    if (png === undefined) throw new Error(`${index}페이지 캔버스 캡처에 실패했습니다.`)
-    pages.push(png)
-    onProgress?.(index, total)
-    if (index < total) {
-      await page.evaluate(() => {
-        document.querySelector<HTMLElement>("input[title='한 페이지 다음으로 이동']")?.click()
-      })
-      await page.waitForFunction(
-        (target) =>
-          document.querySelector<HTMLInputElement>("input[title='현재 페이지']")?.value === String(target),
-        index + 1,
-        { timeout: 15_000 },
-      )
-    }
-  }
-  return pages
+	await setOZZoomTo300(page);
+	await resetOZToFirstPage(page);
+	const total = await readOZTotalPages(page);
+	const pages: Uint8Array[] = [];
+	for (let index = 1; index <= total; index += 1) {
+		const png = await captureStableCanvas(page);
+		if (png === undefined)
+			throw new Error(`${index}페이지 캔버스 캡처에 실패했습니다.`);
+		pages.push(png);
+		onProgress?.(index, total);
+		if (index < total) {
+			await page.evaluate(() => {
+				document
+					.querySelector<HTMLElement>(
+						"input[title='한 페이지 다음으로 이동'], input[title='Move to the next page']",
+					)
+					?.click();
+			});
+			await page.waitForFunction(
+				(target) =>
+					document.querySelector<HTMLInputElement>(
+						"input[title='현재 페이지'], input[title='Current page']",
+					)?.value === String(target),
+				index + 1,
+				{ timeout: 15_000 },
+			);
+		}
+	}
+	return pages;
 }
 
-async function buildPdfFromPngs(pngs: readonly Uint8Array[]): Promise<Uint8Array> {
-  const doc = await PDFDocument.create()
-  for (const png of pngs) {
-    const image = await doc.embedPng(png)
-    const page = doc.addPage([image.width, image.height])
-    page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height })
-  }
-  return doc.save()
+async function buildPdfFromPngs(
+	pngs: readonly Uint8Array[],
+): Promise<Uint8Array> {
+	const doc = await PDFDocument.create();
+	for (const png of pngs) {
+		const image = await doc.embedPng(png);
+		const page = doc.addPage([image.width, image.height]);
+		page.drawImage(image, {
+			x: 0,
+			y: 0,
+			width: image.width,
+			height: image.height,
+		});
+	}
+	return doc.save();
 }
 
-function createSurface(page: Page, disconnect: () => Promise<void>): KrasOzViewerSurface {
-  let capturedPngs: readonly Uint8Array[] | undefined
-  const captureOnce = async (): Promise<readonly Uint8Array[]> => {
-    if (capturedPngs !== undefined) return capturedPngs
-    const pngs = await captureOZPages(page, (completed, total) => {
-      process.stdout.write(`Stage 3: PNG 캡처 ${completed}/${total}페이지 완료\n`)
-    })
-    capturedPngs = pngs
-    return pngs
-  }
-  return {
-    url: () => page.url(),
-    disconnect,
-    hasVisibleCaptcha: () => visibleCaptchaSelector(page),
-    capturePdf: async () => buildPdfFromPngs(await captureOnce()),
-    capturePagePngs: () => captureOnce(),
-    readReportXml: async () => {
-      try {
-        // 1. Try to get XML from global JavaScript variables
-        const xmlFromVar = await page.evaluate(() => {
-          const win = window as any
-          const candidates = [
-            win.ozData,
-            win.OZDATA,
-            win._ozData,
-            win.__ozData,
-            win.ozdata,
-            win.OZ_DATA,
-            win._OZ_DATA,
-            win.reportData,
-            win.REPORT_DATA,
-          ]
-          for (const val of candidates) {
-            if (typeof val === "string" && val.trim().startsWith("<")) return val
-          }
-          return undefined
-        })
-        if (xmlFromVar) return xmlFromVar
+export function createKrasOzViewerSurface(
+	page: Page,
+	disconnect: () => Promise<void> = async () => undefined,
+): KrasOzViewerSurface {
+	let capturedPngs: readonly Uint8Array[] | undefined;
+	const captureOnce = async (): Promise<readonly Uint8Array[]> => {
+		if (capturedPngs !== undefined) return capturedPngs;
+		const pngs = await captureOZPages(page, (completed, total) => {
+			process.stdout.write(
+				`Stage 3: PNG 캡처 ${completed}/${total}페이지 완료\n`,
+			);
+		});
+		capturedPngs = pngs;
+		return pngs;
+	};
+	return {
+		url: () => page.url(),
+		disconnect,
+		hasVisibleCaptcha: () => visibleCaptchaSelector(page),
+		capturePdf: async () => buildPdfFromPngs(await captureOnce()),
+		capturePagePngs: () => captureOnce(),
+		readReportXml: async () => {
+			try {
+				// 1. Try to get XML from global JavaScript variables
+				const xmlFromVar = await page.evaluate(() => {
+					const win = window as any;
+					const candidates = [
+						win.ozData,
+						win.OZDATA,
+						win._ozData,
+						win.__ozData,
+						win.ozdata,
+						win.OZ_DATA,
+						win._OZ_DATA,
+						win.reportData,
+						win.REPORT_DATA,
+					];
+					for (const val of candidates) {
+						if (typeof val === "string" && val.trim().startsWith("<"))
+							return val;
+					}
+					return undefined;
+				});
+				if (xmlFromVar) return xmlFromVar;
 
-        // 2. Extract from page source (content)
-        const content = await page.content()
+				// 2. Extract from page source (content)
+				const content = await page.content();
 
-        // 2a. New OZ format (2026): var strOZDataXML = "<?xml ...?><REAL_LAND>...</REAL_LAND>"
-        const ozVar = content.match(/var\s+strOZDataXML\s*=\s*"((?:[^"\\]|\\.)*)"/)
-        const ozXml = ozVar?.[1]?.trim()
-        if (ozXml !== undefined && ozXml.startsWith("<")) {
-          return ozXml.replace(/\\"/g, '"').replace(/\\\\/g, "\\")
-        }
+				// 2a. New OZ format (2026): var strOZDataXML = "<?xml ...?><REAL_LAND>...</REAL_LAND>"
+				const ozVar = content.match(
+					/var\s+strOZDataXML\s*=\s*"((?:[^"\\]|\\.)*)"/,
+				);
+				const ozXml = ozVar?.[1]?.trim();
+				if (ozXml !== undefined && ozXml.startsWith("<")) {
+					return ozXml.replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+				}
 
-        // 2b. Old format: ozdata=<...REAL_LAND_BLDG...>
-        const match = content.match(/ozdata=(<[\s\S]*?)(?=<\/REAL_LAND_BLDG>)/i)
-        if (match && match[1]) {
-          return `<?xml version='1.0' encoding='euc-kr'?>${match[1]}</REAL_LAND_BLDG>`
-        }
+				// 2b. Old format: ozdata=<...REAL_LAND_BLDG...>
+				const match = content.match(
+					/ozdata=(<[\s\S]*?)(?=<\/REAL_LAND_BLDG>)/i,
+				);
+				if (match && match[1]) {
+					return `<?xml version='1.0' encoding='euc-kr'?>${match[1]}</REAL_LAND_BLDG>`;
+				}
 
-        // 3. Fallback: look for XML in DOM elements
-        const candidates = await page.locator("pre, textarea, [id*='xml' i], [class*='xml' i]").allTextContents()
-        const found = candidates.find((value) => value.trim().startsWith("<"))?.trim()
-        if (found) return found
+				// 3. Fallback: look for XML in DOM elements
+				const candidates = await page
+					.locator("pre, textarea, [id*='xml' i], [class*='xml' i]")
+					.allTextContents();
+				const found = candidates
+					.find((value) => value.trim().startsWith("<"))
+					?.trim();
+				if (found) return found;
 
-        return ""
-      } catch (_) {
-        return ""
-      }
-    },
-  }
+				return "";
+			} catch (_) {
+				return "";
+			}
+		},
+	};
 }
 
-export async function connectKrasOzViewer(): Promise<KrasOzViewerSurface | undefined> {
-  const browser = await chromium.connectOverCDP(CDP_ENDPOINT, { noDefaults: true, timeout: 5000 })
-  const pages = browser.contexts().flatMap((context) => context.pages())
-  const matches = pages.filter((page) => isViewerUrl(page.url()))
-  const exact = matches.length === 1 ? matches[0] : undefined
-  if (exact === undefined) {
-    await browser.close()
-    return undefined
-  }
-  const page = exact
-  return createSurface(page, () => browser.close())
+export class KrasOzViewerSelectionError extends Error {
+	override readonly name = "KrasOzViewerSelectionError";
+	readonly matchCount: number;
+
+	constructor(matchCount: number) {
+		super(
+			`OZ Viewer가 ${matchCount}개 열려 있어 현재 보고서를 확인할 수 없습니다. 이전 뷰어를 정리한 뒤 다시 시도해 주세요.`,
+		);
+		this.matchCount = matchCount;
+	}
+}
+
+export async function connectKrasOzViewer(): Promise<
+	KrasOzViewerSurface | undefined
+> {
+	const { pages, release } = await acquireKrasBrowser();
+	try {
+		const matches = pages.filter((page) => isViewerUrl(page.url()));
+		if (matches.length > 1)
+			throw new KrasOzViewerSelectionError(matches.length);
+		const exact = matches.length === 1 ? matches[0] : undefined;
+		if (exact === undefined) {
+			await release();
+			return undefined;
+		}
+		return createKrasOzViewerSurface(exact, release);
+	} catch (error: unknown) {
+		await release();
+		throw error;
+	}
 }

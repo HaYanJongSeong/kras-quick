@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    kras-quick v2.0.3 one-line installer. Downloads EXE and runtime, verifies SHA-256, installs, and runs.
+    kras-quick v2.1.0 one-line installer. Downloads EXE and runtime, verifies SHA-256, installs, and runs.
     Run: irm https://raw.githubusercontent.com/HaYanJongSeong/kras-quick/main/install.ps1 | iex
 #>
 param(
@@ -8,7 +8,7 @@ param(
     [switch]$NoLaunch
 )
 $ErrorActionPreference = 'Stop'
-$version = '2.0.3'
+$version = '2.1.0'
 $base = "https://github.com/HaYanJongSeong/kras-quick/releases/download/v$version"
 $d = $InstallDir
 $tmp = Join-Path $d ('.kras-quick.' + [guid]::NewGuid().ToString('N'))

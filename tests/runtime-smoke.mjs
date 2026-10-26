@@ -11,7 +11,7 @@ const meta = JSON.parse(await readFile(new URL("../kras-quick-runtime.meta.json"
 const root = await ensureRuntime(meta, {
   ...process.env,
   KRAS_QUICK_CACHE_DIR: cache,
-  KRAS_QUICK_RUNTIME_PATH: resolve("dist/kras-quick-runtime-v2.0.3.zip"),
+  KRAS_QUICK_RUNTIME_PATH: resolve(`dist/kras-quick-runtime-v${meta.version}.zip`),
 })
 const node = join(root, "node", "node.exe")
 const script = join(root, "scripts", "property-auto-runner.ts")
@@ -22,21 +22,24 @@ assert.equal(spawnSync(join(root, "tesseract", "tesseract.exe"), ["--version"]).
 assert.equal(await ensureRuntime(meta, { ...process.env, KRAS_QUICK_CACHE_DIR: cache }), root)
 console.log("PASS: runtime hash, extraction, all imports, Tesseract, cached reuse")
 
-const exe = spawn(resolve("dist/kras-quick.exe"), [], { stdio: ["pipe", "pipe", "pipe"] })
+const exe = spawn(resolve("dist/kras-quick.exe"), [], {
+  stdio: ["pipe", "pipe", "pipe"],
+  env: { ...process.env, KRAS_QUICK_CACHE_DIR: cache },
+})
 let output = ""
-const ready = await new Promise((resolveReady, reject) => {
-  const timer = setTimeout(() => reject(new Error("EXE startup timeout")), 15000)
+const exitCode = await new Promise((resolveExit, reject) => {
+  const timer = setTimeout(() => {
+    exe.kill()
+    reject(new Error("EXE startup timeout"))
+  }, 30000)
   exe.stdout.on("data", (data) => {
     output += data.toString("utf8")
-    if (output.includes("Chrome을 열까요?")) {
-      clearTimeout(timer)
-      resolveReady(true)
-    }
   })
   exe.on("error", reject)
-  exe.on("exit", () => { clearTimeout(timer); resolveReady(false) })
+  exe.on("close", (code) => { clearTimeout(timer); resolveExit(code) })
+  exe.stdin.end("0\n")
 })
-exe.kill()
-assert.equal(ready, true, output)
-assert.match(output, /kras-quick v2\.0\.3/)
-console.log("PASS: EXE starts and reaches the Chrome prompt; no KRAS query submitted")
+assert.equal(exitCode, 0, output)
+assert.ok(output.includes(`kras-quick v${meta.version}`), output)
+assert.ok(output.includes("브라우저 번호 >"), output)
+console.log("PASS: EXE reaches browser selection and cancels cleanly; no browser or KRAS query started")

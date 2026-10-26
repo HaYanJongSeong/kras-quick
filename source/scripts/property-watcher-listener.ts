@@ -1,12 +1,14 @@
 import {
-  PROPERTY_GUIDANCE_ABSENT_PROMPT,
-  PROPERTY_GUIDANCE_COPY_FAILURE,
-  PROPERTY_GUIDANCE_CSS,
-  PROPERTY_GUIDANCE_ITEMS,
-} from "./property-watcher-guidance.ts"
+	PROPERTY_GUIDANCE_ABSENT_PROMPT,
+	PROPERTY_GUIDANCE_COPY_FAILURE,
+	PROPERTY_GUIDANCE_CSS,
+	PROPERTY_GUIDANCE_ITEMS,
+} from "./property-watcher-guidance.ts";
 
-export const PROPERTY_WATCHER_BINDING_NAME = "__opencodePropertyWatcherRowV3" as const
-export const PROPERTY_WATCHER_WORLD_NAME = "opencode-property-watcher-v1" as const
+export const PROPERTY_WATCHER_BINDING_NAME =
+	"__opencodePropertyWatcherRowV3" as const;
+export const PROPERTY_WATCHER_WORLD_NAME =
+	"opencode-property-watcher-v1" as const;
 
 export const PROPERTY_WATCHER_LISTENER_SOURCE = `(() => {
   const stateKey = "__opencodePropertyWatcherListenerV3";
@@ -239,7 +241,7 @@ export const PROPERTY_WATCHER_LISTENER_SOURCE = `(() => {
   };
   globalThis[stateKey] = state;
   document.addEventListener("click", listener, true);
-})()`
+})()`;
 
 export const PROPERTY_WATCHER_CLEANUP_SOURCE = `(() => {
   const stateKey = "__opencodePropertyWatcherListenerV3";
@@ -249,4 +251,4 @@ export const PROPERTY_WATCHER_CLEANUP_SOURCE = `(() => {
   state.panel?.remove();
   state.style?.remove();
   delete globalThis[stateKey];
-})()`
+})()`;

@@ -101,12 +101,12 @@ option:disabled,
 :focus-visible {
   outline: 2px solid var(--kras-focus) !important;
   outline-offset: 2px !important;
-}`
+}`;
 
 export function darkModeEvaluation(css: string): void {
-  const existing = document.getElementById("opencode-dark-mode")
-  const style = existing ?? document.createElement("style")
-  style.id = "opencode-dark-mode"
-  style.textContent = css
-  if (existing === null) document.head.append(style)
+	const existing = document.getElementById("opencode-dark-mode");
+	const style = existing ?? document.createElement("style");
+	style.id = "opencode-dark-mode";
+	style.textContent = css;
+	if (existing === null) document.head.append(style);
 }

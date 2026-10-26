@@ -1,7 +1,8 @@
 {
   "type": "module",
   "scripts": {
-    "test:kras": "node --test tests/kras-auto-stages.test.ts tests/kras-pnu.test.ts tests/kras-workflow-watcher.test.ts tests/kras-excel-updater.test.ts tests/kras.test.ts tests/kras-dark.test.ts tests/kras-bridge.test.ts tests/kras-quick-runtime.test.ts tests/kras-tesseract.test.ts tests/property-auto-runner.test.ts",
+    "test:kras": "node --test tests/kras-browser-choice.test.ts tests/kras-browser-process.test.ts tests/kras-auto-stages.test.ts tests/kras-pnu.test.ts tests/kras-workflow-watcher.test.ts tests/kras-excel-updater.test.ts tests/kras.test.ts tests/kras-dark.test.ts tests/kras-bridge.test.ts tests/kras-quick-runtime.test.ts tests/kras-tesseract.test.ts tests/property-auto-runner.test.ts",
+    "test:browser": "node --test tests/kras-browser.integration.test.ts tests/kras-oz-locales.integration.test.ts",
     "test:property": "node --test tests/property-address.test.ts tests/property-progress.test.ts tests/property-progress-windows.test.ts tests/property-watcher-page.test.ts tests/property-watcher-listener.test.ts tests/property-watcher-guidance-copy.test.ts tests/property-watcher-guidance-copy-fallback.test.ts tests/property-watcher-channel.test.ts tests/property-watcher-channel-navigation.test.ts tests/property-watcher-channel-fatal.test.ts tests/property-watcher-cdp.test.ts tests/property-watcher.test.ts tests/property-watcher-runtime.test.ts tests/property-watcher-process.test.ts tests/property-watcher-control.test.ts tests/property-watcher-state.test.ts tests/property-watcher-lifecycle.test.ts tests/property-watcher-runner.test.ts tests/property-watcher-runner-failure.test.ts tests/property-auto-runner.test.ts tests/property-auto-output.test.ts tests/terminal-reader.test.ts",
     "test:all": "npm run test:kras && npm run test:property",
     "typecheck:kras": "tsc --project tsconfig.kras.json",
@@ -20,7 +21,8 @@
     "@opencode-ai/plugin": "^1.18.4",
     "exceljs": "^4.4.0",
     "pdf-lib": "^1.17.1",
-    "playwright": "^1.61.1",
+    "playwright": "1.61.1",
+    "playwright-core": "1.61.1",
     "zod": "4.1.8"
   },
   "devDependencies": {

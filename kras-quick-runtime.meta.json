@@ -1,6 +1,6 @@
 {
-    "//":  "GENERATED FILE - overwritten by build-single-exe.ps1",
-    "version":  "2.0.3",
-    "url":  "https://github.com/HaYanJongSeong/kras-quick/releases/download/v2.0.3/kras-quick-runtime-v2.0.3.zip",
-    "sha256":  "C85CBBAFE13BA90F1D3327C31524507DA8232619FE09D800C666F5BFAB1E9D62"
+  "//": "GENERATED FILE - overwritten by build-single-exe.ps1",
+  "version": "2.1.0",
+  "url": "https://github.com/HaYanJongSeong/kras-quick/releases/download/v2.1.0/kras-quick-runtime-v2.1.0.zip",
+  "sha256": "69892613B82B9F71011BB6D9E082BC0C03ACB57F82B311FF93B60ABAD0720762"
 }

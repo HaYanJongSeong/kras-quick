@@ -1,19 +1,26 @@
-import { execFile } from "node:child_process"
-import { lstat } from "node:fs/promises"
+import { execFile } from "node:child_process";
+import { lstat } from "node:fs/promises";
 
-export type LockedWriteResult = "written" | "source_changed"
+export type LockedWriteResult = "written" | "source_changed";
 
-type PowerShellResult = { readonly ok: true; readonly stdout: string } | { readonly ok: false }
+type PowerShellResult =
+	| { readonly ok: true; readonly stdout: string }
+	| { readonly ok: false };
 
 function createEncodedCommand(
-  targetPath: string,
-  expectedSnapshotPath: string,
-  replacementPath: string,
+	targetPath: string,
+	expectedSnapshotPath: string,
+	replacementPath: string,
 ): string {
-  const targetPathBase64 = Buffer.from(targetPath, "utf8").toString("base64")
-  const expectedSnapshotPathBase64 = Buffer.from(expectedSnapshotPath, "utf8").toString("base64")
-  const replacementPathBase64 = Buffer.from(replacementPath, "utf8").toString("base64")
-  const script = `
+	const targetPathBase64 = Buffer.from(targetPath, "utf8").toString("base64");
+	const expectedSnapshotPathBase64 = Buffer.from(
+		expectedSnapshotPath,
+		"utf8",
+	).toString("base64");
+	const replacementPathBase64 = Buffer.from(replacementPath, "utf8").toString(
+		"base64",
+	);
+	const script = `
 & {
   $ErrorActionPreference = "Stop"
   try {
@@ -59,68 +66,69 @@ function createEncodedCommand(
     exit 1
   }
 }
-`
-  return Buffer.from(script, "utf16le").toString("base64")
+`;
+	return Buffer.from(script, "utf16le").toString("base64");
 }
 
 const POWERSHELL_OPTIONS = {
-  encoding: "utf8",
-  shell: false,
-  timeout: 30000,
-  windowsHide: true,
-} as const
+	encoding: "utf8",
+	shell: false,
+	timeout: 30000,
+	windowsHide: true,
+} as const;
 
 export class LockedWriteError extends Error {
-  override readonly name = "LockedWriteError"
+	override readonly name = "LockedWriteError";
 
-  constructor() {
-    super("Windows locked progress write failed.")
-  }
+	constructor() {
+		super("Windows locked progress write failed.");
+	}
 }
 
 function executePowerShell(encodedCommand: string): Promise<PowerShellResult> {
-  return new Promise((resolve) => {
-    execFile(
-      "powershell.exe",
-      ["-NoProfile", "-NonInteractive", "-EncodedCommand", encodedCommand],
-      POWERSHELL_OPTIONS,
-      (error, stdout) => {
-        if (error !== null) {
-          resolve({ ok: false })
-          return
-        }
-        resolve({ ok: true, stdout })
-      },
-    )
-  })
+	return new Promise((resolve) => {
+		execFile(
+			"powershell.exe",
+			["-NoProfile", "-NonInteractive", "-EncodedCommand", encodedCommand],
+			POWERSHELL_OPTIONS,
+			(error, stdout) => {
+				if (error !== null) {
+					resolve({ ok: false });
+					return;
+				}
+				resolve({ ok: true, stdout });
+			},
+		);
+	});
 }
 
 export async function compareAndWriteLocked(
-  targetPath: string,
-  expectedSnapshotPath: string,
-  replacementPath: string,
+	targetPath: string,
+	expectedSnapshotPath: string,
+	replacementPath: string,
 ): Promise<LockedWriteResult> {
-  if (process.platform !== "win32") throw new LockedWriteError()
+	if (process.platform !== "win32") throw new LockedWriteError();
 
-  try {
-    const target = await lstat(targetPath)
-    if (!target.isFile() || target.isSymbolicLink()) throw new LockedWriteError()
-  } catch (error) {
-    if (error instanceof LockedWriteError) throw error
-    throw new LockedWriteError()
-  }
+	try {
+		const target = await lstat(targetPath);
+		if (!target.isFile() || target.isSymbolicLink())
+			throw new LockedWriteError();
+	} catch (error) {
+		if (error instanceof LockedWriteError) throw error;
+		throw new LockedWriteError();
+	}
 
-  const result = await executePowerShell(
-    createEncodedCommand(targetPath, expectedSnapshotPath, replacementPath),
-  )
-  if (!result.ok) throw new LockedWriteError()
+	const result = await executePowerShell(
+		createEncodedCommand(targetPath, expectedSnapshotPath, replacementPath),
+	);
+	if (!result.ok) throw new LockedWriteError();
 
-  switch (result.stdout.trim()) {
-    case "written":
-      return "written"
-    case "source_changed":
-      return "source_changed"
-    default:
-      throw new LockedWriteError()
-  }
+	switch (result.stdout.trim()) {
+		case "written":
+			return "written";
+		case "source_changed":
+			return "source_changed";
+		default:
+			throw new LockedWriteError();
+	}
 }

@@ -1,10 +1,10 @@
-# Creates a small kras-quick launcher plus an external runtime ZIP. Chrome remains external.
+﻿# Creates a small kras-quick launcher plus an external runtime ZIP. Browsers remain external.
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$source = Join-Path $root "source"
+$sourceRoot = if (Test-Path (Join-Path $root "source\scripts")) { Join-Path $root "source" } else { $root }
 $runtime = Join-Path $root "dist\kras-quick"
-$staging = Join-Path $env:TEMP "kras-quick-runtime"
-$version = "2.0.3"
+$staging = Join-Path $env:TEMP ("kras-quick-runtime-" + [Guid]::NewGuid().ToString("N"))
+$version = "2.1.0"
 $payload = Join-Path $root "dist\kras-quick-runtime-v$version.zip"
 $metaPath = Join-Path $root "kras-quick-runtime.meta.json"
 $output = Join-Path $root "dist\kras_quick.exe"
@@ -12,7 +12,19 @@ $output = Join-Path $root "dist\kras_quick.exe"
 if (-not (Test-Path (Join-Path $runtime "node\node.exe"))) {
     throw "dist\kras-quick runtime missing. Run build-portable.ps1 first."
 }
-if (Test-Path $staging) { Remove-Item -Recurse -Force $staging }
+foreach ($target in @($payload, $metaPath, $output)) {
+    if (-not (Test-Path -LiteralPath $target)) { continue }
+    $directory = Split-Path -Parent $target
+    $stem = [IO.Path]::GetFileNameWithoutExtension($target)
+    $extension = [IO.Path]::GetExtension($target)
+    foreach ($generation in @(2, 1)) {
+        $backup = Join-Path $directory ($stem + "_백업" + $generation + $extension)
+        if (Test-Path -LiteralPath $backup) {
+            Copy-Item -LiteralPath $backup -Destination (Join-Path $directory ($stem + "_백업" + ($generation + 1) + $extension)) -Force
+        }
+    }
+    Copy-Item -LiteralPath $target -Destination (Join-Path $directory ($stem + "_백업1" + $extension)) -Force
+}
 New-Item -ItemType Directory -Force -Path (Join-Path $staging "scripts") | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $staging "node") | Out-Null
 Copy-Item (Join-Path $runtime "node\node.exe") (Join-Path $staging "node\node.exe")
@@ -20,7 +32,8 @@ Copy-Item (Join-Path $runtime "node\node.exe") (Join-Path $staging "node\node.ex
 # 데모(captcha-ansi-demo), MCP 브리지(kras-bridge/kras-runner/kras-lookup),
 # 독립 도구(kras-excel-copy, scp-usage-watcher), 타입 선언은 payload에서 제외.
 $payloadScripts = @(
-    "kras-auto-stages.ts", "kras-dark.ts", "kras-domain.ts", "kras-excel-updater.ts",
+    "kras-auto-stages.ts", "kras-browser.ts", "kras-browser-choice.ts", "kras-browser-process.ts",
+    "kras-dark.ts", "kras-domain.ts", "kras-excel-updater.ts",
     "kras-lawdong.ts", "kras-oz.ts", "kras-page.ts", "kras-pnu.ts", "kras-tesseract.ts",
     "kras-workflow-watcher.ts",
     "property-address.ts", "property-auto-output.ts", "property-auto-runner.ts",
@@ -34,7 +47,7 @@ $payloadScripts = @(
     "property-watcher-start.ts", "property-watcher-state.ts", "terminal-reader.ts"
 )
 foreach ($name in $payloadScripts) {
-    Copy-Item (Join-Path $source "scripts\$name") (Join-Path $staging "scripts")
+    Copy-Item (Join-Path $sourceRoot "scripts\$name") (Join-Path $staging "scripts")
 }
 $tesseractSource = "C:\Program Files\Tesseract-OCR"
 $tesseractTarget = Join-Path $staging "tesseract"
@@ -65,8 +78,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "quick runtime npm install failed (exit $LASTEXITCODE)"
 }
 Pop-Location
-if (Test-Path $payload) { Remove-Item -Force $payload }
-Compress-Archive -Path (Join-Path $staging "*") -DestinationPath $payload -CompressionLevel Optimal
+Compress-Archive -Path (Join-Path $staging "*") -DestinationPath $payload -CompressionLevel Optimal -Force
 $runtimeSha256 = (Get-FileHash -LiteralPath $payload -Algorithm SHA256).Hash
 $meta = [ordered]@{
     "//" = "GENERATED FILE - overwritten by build-single-exe.ps1"
@@ -75,10 +87,11 @@ $meta = [ordered]@{
     sha256 = $runtimeSha256
 } | ConvertTo-Json
 [System.IO.File]::WriteAllText($metaPath, $meta, [System.Text.UTF8Encoding]::new($false))
+if ($sourceRoot -ne $root) { Copy-Item -LiteralPath $metaPath -Destination (Join-Path $sourceRoot "kras-quick-runtime.meta.json") -Force }
 Write-Host "Runtime ZIP: $payload"
 Write-Host "Runtime SHA-256: $runtimeSha256"
 
-  bun build --compile --target=bun-windows-x64 (Join-Path $source "scripts\kras-quick-launcher.ts") --outfile $output --windows-icon (Join-Path $root "kras-quick.ico") --windows-title "KRAS Quick" --windows-publisher "HaYanJongSeong" --windows-version "2.0.3.0" --windows-description "KRAS certificate one-line installer and OZ viewer capture" --windows-copyright "Copyright (c) 2026 HaYanJongSeong"
+  bun build --compile --target=bun-windows-x64 (Join-Path $sourceRoot "scripts\kras-quick-launcher.ts") --outfile $output --windows-icon (Join-Path $root "kras-quick.ico") --windows-title "KRAS Quick" --windows-publisher "HaYanJongSeong" --windows-version "2.1.0.0" --windows-description "KRAS certificate one-line installer and OZ viewer capture" --windows-copyright "Copyright (c) 2026 HaYanJongSeong"
 if ($LASTEXITCODE -ne 0) { throw "single EXE build failed" }
 
 Remove-Item -Recurse -Force $staging
