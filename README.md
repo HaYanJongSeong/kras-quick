@@ -30,14 +30,14 @@ kras-quick-runtime-v2.1.1.zip
 공개 npm 패키지 2.1.1이 게시되면 다음 명령으로 설치하거나 실행합니다. npm·npx는 Node.js 18 이상이 필요합니다.
 
 ```powershell
-npm install -g @hayanjongseong/kras-quick@2.1.1
+npm install -g kras-quick@2.1.1
 kras-quick
 ```
 
 설치 없이 실행하려면 다음 명령을 사용하세요.
 
 ```powershell
-npx --yes @hayanjongseong/kras-quick@2.1.1
+npx kras-quick
 ```
 
 다운로드 폴더에 로컬 테스트 패키지와 해당 버전의 EXE·runtime ZIP을 준비한 경우에는 공개 registry 대신 로컬 패키지를 실행할 수 있습니다.
