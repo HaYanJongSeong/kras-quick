@@ -1,6 +1,8 @@
 ﻿# Never commit binaries, checksums, or install temp files.
 *.exe
 *.exe.sha256
+*.zip
+*.zip.sha256
 *.tmp
 node_modules/
 dist/
