@@ -1,5 +1,20 @@
 # 배포 검증 기록
 
+## 2.1.1 정식 게시 (2026-10-27)
+
+- GitHub Release `v2.1.1`의 EXE·runtime ZIP·체크섬 2개를 공개했다. 네 자산의 익명 다운로드와 SHA-256 대조가 통과했다. 기존 릴리스·태그는 보존했다.
+- 공개 `main/install.ps1`을 받아 격리 폴더에 `-NoLaunch`로 설치하고 EXE·runtime ZIP의 SHA-256을 확인했다.
+- 확정 npm 이름은 `kras-quick`이다. `kras-quick@2.1.1`의 공개 조회, `latest=2.1.1`, 공개 tarball과 준비본의 SHA-512 일치를 확인했다.
+- Windows의 빈 작업 폴더·별도 사용자 폴더·새 캐시에서 `npm install -g kras-quick` 후 실행과 `npx kras-quick`을 각각 검증했다. 두 경로 모두 2.1.1 시작·브라우저 선택 메뉴·`0` 취소 정상 종료·EXE SHA-256 검증을 통과했다. 실제 KRAS 로그인·조회는 제출하지 않았다.
+- `package.json`·lockfile·bin 이름과 `npx kras-quick` 계약을 실행기 검사에 추가했다. 잘못된 scoped 이름에서 실패하고 수정한 이름에서 통과하는 것을 확인했다.
+- 앞서 실수로 게시한 scoped 패키지의 검증은 위 unscoped 패키지 검증의 대체 근거로 사용하지 않았다. 사용자 승인과 모바일 패스키 승인 후 scoped 패키지 전체를 삭제했다. 공개 registry의 버전 목록이 비었고 삭제 이력만 남으며 scoped 2.1.1 조회는 404인 것을 확인했다. 정상 `kras-quick@2.1.1`은 유지했다.
+- 게시 도중 `E409`를 한 차례 받았다. 상세 응답이 남지 않아 원인을 확정하지 않았고, 이를 버전 중복이나 삭제 이력 때문이라고 단정하지 않았다. 이후 동일 버전이 접수됐고 공개 반영을 확인한 다음 실행을 검증했다.
+
+```text
+kras-quick@2.1.1
+sha512-YaJRDJhyy9DhDa2VBFnLhEa2vEeY6WhzXh5fI+MKlLR3LkMnUQFVx7Qg+Ms9tT48BFcU2S5azdAuDWQfGUBVqg==
+```
+
 ## 2.1.1 로컬 검증본 (2026-10-27, 미공개)
 
 다음은 정식 게시 전 로컬 빌드 검증 시점의 기록이다. 이후 커밋·푸시·게시 상태와 구분한다.

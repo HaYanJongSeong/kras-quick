@@ -2,7 +2,7 @@
 
 KRAS/OZ 토지·건축물 조회 자동화 도구입니다.
 
-GitHub 릴리스와 npm 패키지는 별도로 게시됩니다. 각 채널의 2.1.1 게시가 완료된 뒤 해당 설치 명령을 사용할 수 있습니다.
+GitHub 릴리스와 npm 패키지 `kras-quick`의 공개 버전은 2.1.1입니다.
 
 ## GitHub 설치
 
@@ -27,7 +27,7 @@ kras-quick-runtime-v2.1.1.zip
 
 ## npm으로 설치
 
-공개 npm 패키지 2.1.1이 게시되면 다음 명령으로 설치하거나 실행합니다. npm·npx는 Node.js 18 이상이 필요합니다.
+공개 npm 패키지 이름은 `kras-quick`이며 `latest`는 2.1.1입니다. npm·npx는 Node.js 18 이상이 필요합니다.
 
 ```powershell
 npm install -g kras-quick@2.1.1
