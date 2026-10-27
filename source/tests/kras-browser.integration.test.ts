@@ -261,9 +261,11 @@ describe("KRAS real Windows browser connectors with MOCK-only pages", {
 						viewer.disconnect !== undefined && watcher.disconnect !== undefined,
 					);
 					await viewer.disconnect();
-					const closing = popup.waitForEvent("close");
-					assert.equal(await watcher.closeOzViewer(), true);
-					await closing;
+					const [, closed] = await Promise.all([
+						popup.waitForEvent("close", { timeout: 30_000 }),
+						watcher.closeOzViewer(),
+					]);
+					assert.equal(closed, true);
 					assert.equal(stale.isClosed(), false);
 					assert.equal(
 						await stale.evaluate(() => Reflect.get(window, "ozData")),

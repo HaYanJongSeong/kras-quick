@@ -22,6 +22,7 @@ import {
 	withBuildingSuffix,
 } from "../scripts/kras-auto-stages.ts";
 import { parseParcelAddress } from "../scripts/property-address.ts";
+import { TEST_PDF, TEST_PNG } from "./kras-capture-fixture.ts";
 
 const stage1: KrasAutoStage1Result = {
 	version: 1,
@@ -71,8 +72,8 @@ describe("KRAS automatic stage state", () => {
 				{
 					url: () => "https://kras.go.kr/oz80/ozhviewer/report.jsp",
 					hasVisibleCaptcha: async () => false,
-					capturePdf: async () => Buffer.from("pdf"),
-					capturePagePngs: async () => [Buffer.from("png")],
+					capturePdf: async () => TEST_PDF,
+					capturePagePngs: async () => [TEST_PNG],
 					readReportXml: async () =>
 						VALID_XML.replace(
 							"<LAND_LOC_NM>서울특별시 용산구 용산동2가 5-227</LAND_LOC_NM>",
@@ -99,8 +100,8 @@ describe("KRAS automatic stage state", () => {
 				{
 					url: () => "https://kras.go.kr/oz80/ozhviewer/report.jsp",
 					hasVisibleCaptcha: async () => false,
-					capturePdf: async () => Buffer.from("pdf"),
-					capturePagePngs: async () => [Buffer.from("png")],
+					capturePdf: async () => TEST_PDF,
+					capturePagePngs: async () => [TEST_PNG],
 					readReportXml: async () =>
 						VALID_XML.replaceAll("<LAND_BASE>", "<oz:LAND_BASE>")
 							.replaceAll("</LAND_BASE>", "</oz:LAND_BASE>")
@@ -140,8 +141,8 @@ describe("KRAS automatic stage state", () => {
 				{
 					url: () => "https://kras.go.kr/oz80/ozhviewer/report.jsp",
 					hasVisibleCaptcha: async () => false,
-					capturePdf: async () => Buffer.from("pdf"),
-					capturePagePngs: async () => [Buffer.from("png")],
+					capturePdf: async () => TEST_PDF,
+					capturePagePngs: async () => [TEST_PNG],
 					readReportXml: async () => VALID_XML,
 				},
 				paths,
@@ -161,9 +162,9 @@ describe("KRAS automatic stage state", () => {
 				throw new Error("Stage 3 should have completed");
 			}
 			assert.equal(result.output.pdf, pdfPath);
-			assert.equal(await readFile(pdfPath, "utf8"), "pdf");
+			assert.deepEqual(await readFile(pdfPath), TEST_PDF);
 			assert.equal(result.output.pagePngs[0], pngPath);
-			assert.equal(await readFile(pngPath, "utf8"), "png");
+			assert.deepEqual(await readFile(pngPath), TEST_PNG);
 			assert.equal(result.output.pageXml, xmlPath);
 			assert.equal(await readFile(xmlPath, "utf8"), VALID_XML);
 			assert.equal(result.output.structureJson, structureJsonPath);
@@ -196,8 +197,8 @@ describe("KRAS automatic stage state", () => {
 				{
 					url: () => "https://kras.go.kr/oz80/ozhviewer/report.jsp",
 					hasVisibleCaptcha: async () => false,
-					capturePdf: async () => Buffer.from("pdf"),
-					capturePagePngs: async () => [Buffer.from("png")],
+					capturePdf: async () => TEST_PDF,
+					capturePagePngs: async () => [TEST_PNG],
 					readReportXml: async () => VALID_XML,
 				},
 				paths,
@@ -254,6 +255,19 @@ describe("KRAS automatic stage state", () => {
 				),
 				"json",
 			);
+			assert.equal(isKrasStage3OutputComplete(paths, building), false);
+			await runKrasAutoStage3(
+				stage2,
+				{
+					url: () => "https://kras.go.kr/oz80/ozhviewer/report.jsp",
+					hasVisibleCaptcha: async () => false,
+					capturePdf: async () => TEST_PDF,
+					capturePagePngs: async () => [TEST_PNG],
+					readReportXml: async () => VALID_XML,
+				},
+				paths,
+				async () => "",
+			);
 			assert.equal(isKrasStage3OutputComplete(paths, building), true);
 			assert.equal(
 				isKrasStage3OutputComplete(paths, building, floorRoom),
@@ -287,6 +301,22 @@ describe("KRAS automatic stage state", () => {
 			);
 			assert.equal(
 				isKrasStage3OutputComplete(paths, building, floorRoom),
+				false,
+			);
+			await runKrasAutoStage3(
+				{ ...stage2, floorRoom },
+				{
+					url: () => "https://kras.go.kr/oz80/ozhviewer/report.jsp",
+					hasVisibleCaptcha: async () => false,
+					capturePdf: async () => TEST_PDF,
+					capturePagePngs: async () => [TEST_PNG],
+					readReportXml: async () => VALID_XML,
+				},
+				paths,
+				async () => "",
+			);
+			assert.equal(
+				isKrasStage3OutputComplete(paths, building, floorRoom),
 				true,
 			);
 			assert.equal(isKrasStage3OutputComplete(paths, building, sibling), false);
@@ -310,8 +340,8 @@ describe("KRAS automatic stage state", () => {
 				{
 					url: () => "https://kras.go.kr/oz80/ozhviewer/report.jsp",
 					hasVisibleCaptcha: async () => false,
-					capturePdf: async () => Buffer.from("portable-pdf"),
-					capturePagePngs: async () => [Buffer.from("portable-png")],
+					capturePdf: async () => TEST_PDF,
+					capturePagePngs: async () => [TEST_PNG],
 					readReportXml: async () => VALID_XML,
 				},
 				paths,
@@ -322,10 +352,10 @@ describe("KRAS automatic stage state", () => {
 				throw new Error("Portable capture should complete");
 			assert.equal(result.output.pdf.startsWith(portableRoot), true);
 			assert.equal(result.output.pageXml.startsWith(portableRoot), true);
-			assert.equal(await readFile(result.output.pdf, "utf8"), "portable-pdf");
-			assert.equal(
-				await readFile(result.output.pagePngs[0] ?? "", "utf8"),
-				"portable-png",
+			assert.deepEqual(await readFile(result.output.pdf), TEST_PDF);
+			assert.deepEqual(
+				await readFile(result.output.pagePngs[0] ?? ""),
+				TEST_PNG,
 			);
 			assert.equal(result.output.structureJson.startsWith(portableRoot), true);
 			assert.equal(await readFile(excelPath, "utf8"), "excel-sentinel");
@@ -360,8 +390,8 @@ describe("KRAS automatic stage state", () => {
 				{
 					url: () => "https://kras.go.kr/oz80/ozhviewer/report.jsp",
 					hasVisibleCaptcha: async () => false,
-					capturePdf: async () => Buffer.from("pdf"),
-					capturePagePngs: async () => [Buffer.from("png")],
+					capturePdf: async () => TEST_PDF,
+					capturePagePngs: async () => [TEST_PNG],
 					readReportXml: async () => VALID_XML,
 				},
 				paths,
@@ -378,7 +408,7 @@ describe("KRAS automatic stage state", () => {
 			const renamedXml = join(root, "기타", "report-주건축물-재발급.xml");
 			assert.equal(result.output.pdf, renamedPdf);
 			assert.equal(result.output.pageXml, renamedXml);
-			assert.equal(await readFile(renamedPdf, "utf8"), "pdf");
+			assert.deepEqual(await readFile(renamedPdf), TEST_PDF);
 			assert.equal(await readFile(renamedXml, "utf8"), VALID_XML);
 			assert.equal(
 				await readFile(join(root, "certificate-주건축물.pdf"), "utf8"),
@@ -416,8 +446,8 @@ describe("KRAS automatic stage state", () => {
 				{
 					url: () => "https://kras.go.kr/oz80/ozhviewer/report.jsp",
 					hasVisibleCaptcha: async () => false,
-					capturePdf: async () => Buffer.from("pdf"),
-					capturePagePngs: async () => [Buffer.from("png")],
+					capturePdf: async () => TEST_PDF,
+					capturePagePngs: async () => [TEST_PNG],
 					readReportXml: async () => VALID_XML,
 				},
 				paths,
@@ -461,8 +491,8 @@ describe("KRAS automatic stage state", () => {
 					{
 						url: () => "https://kras.go.kr/oz80/ozhviewer/report.jsp",
 						hasVisibleCaptcha: async () => false,
-						capturePdf: async () => Buffer.from("pdf"),
-						capturePagePngs: async () => [Buffer.from("png")],
+						capturePdf: async () => TEST_PDF,
+						capturePagePngs: async () => [TEST_PNG],
 						readReportXml: async () => VALID_XML,
 					},
 					paths,
@@ -497,8 +527,8 @@ describe("KRAS automatic stage state", () => {
 				{
 					url: () => "https://kras.go.kr/oz80/ozhviewer/report.jsp",
 					hasVisibleCaptcha: async () => false,
-					capturePdf: async () => Buffer.from("pdf"),
-					capturePagePngs: async () => [Buffer.from("png")],
+					capturePdf: async () => TEST_PDF,
+					capturePagePngs: async () => [TEST_PNG],
 					readReportXml: async () => MISMATCH_XML,
 				},
 				paths,
@@ -511,7 +541,7 @@ describe("KRAS automatic stage state", () => {
 				paths.directory,
 				stage2.building.label,
 			);
-			assert.deepEqual((await readFile(pdfPath)).toString(), "pdf");
+			assert.deepEqual(await readFile(pdfPath), TEST_PDF);
 			assert.deepEqual(
 				(
 					await readFile(

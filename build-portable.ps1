@@ -14,6 +14,7 @@ New-Item -ItemType Directory -Force -Path (Join-Path $dist "node") | Out-Null
 # 2. 파일 복사
 Copy-Item (Join-Path $root "quick.bat") (Join-Path $dist "quick.bat")
 Copy-Item (Join-Path $sourceRoot "package.json") (Join-Path $dist "package.json")
+Copy-Item (Join-Path $sourceRoot "package-lock.json") (Join-Path $dist "package-lock.json")
 Get-ChildItem (Join-Path $sourceRoot "scripts\*.ts") | Where-Object { $_.Name -notmatch '_백업[123]\.ts$' } | Copy-Item -Destination (Join-Path $dist "scripts")
 $tesseractSource = "C:\Program Files\Tesseract-OCR"
 $tesseractTarget = Join-Path $dist "tesseract"
@@ -43,7 +44,7 @@ if (-not (Test-Path $nodeExe)) {
 # 4. 의존성 설치 (cmd로 실행해 native stderr와 PowerShell의 충돌 회피)
 Push-Location $dist
 $env:PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1"
-cmd /c "npm install --omit=dev --no-audit --no-fund 2>&1" | Out-Host
+cmd /c "npm ci --omit=dev --ignore-scripts --no-audit --no-fund 2>&1" | Out-Host
 if ($LASTEXITCODE -ne 0) {
     Pop-Location
     throw "npm install 실패 (exit $LASTEXITCODE)"

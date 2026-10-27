@@ -4,7 +4,7 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $sourceRoot = if (Test-Path (Join-Path $root "source\scripts")) { Join-Path $root "source" } else { $root }
 $runtime = Join-Path $root "dist\kras-quick"
 $staging = Join-Path $env:TEMP ("kras-quick-runtime-" + [Guid]::NewGuid().ToString("N"))
-$version = "2.1.0"
+$version = "2.1.1"
 $payload = Join-Path $root "dist\kras-quick-runtime-v$version.zip"
 $metaPath = Join-Path $root "kras-quick-runtime.meta.json"
 $output = Join-Path $root "dist\kras_quick.exe"
@@ -32,6 +32,7 @@ Copy-Item (Join-Path $runtime "node\node.exe") (Join-Path $staging "node\node.ex
 # 데모(captcha-ansi-demo), MCP 브리지(kras-bridge/kras-runner/kras-lookup),
 # 독립 도구(kras-excel-copy, scp-usage-watcher), 타입 선언은 payload에서 제외.
 $payloadScripts = @(
+    "kras-output-integrity.ts", "kras-output-writer.ts",
     "kras-auto-stages.ts", "kras-browser.ts", "kras-browser-choice.ts", "kras-browser-process.ts",
     "kras-dark.ts", "kras-domain.ts", "kras-excel-updater.ts",
     "kras-lawdong.ts", "kras-oz.ts", "kras-page.ts", "kras-pnu.ts", "kras-tesseract.ts",
@@ -66,7 +67,7 @@ $quickPackage = @{
     dependencies = @{
         "pdf-lib" = "1.17.1"
         "playwright-core" = "1.61.1"
-        zod = "4.1.8"
+        zod = "4.6.7"
     }
 } | ConvertTo-Json -Depth 4
 [System.IO.File]::WriteAllText((Join-Path $staging "package.json"), $quickPackage, [System.Text.UTF8Encoding]::new($false))
@@ -91,7 +92,7 @@ if ($sourceRoot -ne $root) { Copy-Item -LiteralPath $metaPath -Destination (Join
 Write-Host "Runtime ZIP: $payload"
 Write-Host "Runtime SHA-256: $runtimeSha256"
 
-  bun build --compile --target=bun-windows-x64 (Join-Path $sourceRoot "scripts\kras-quick-launcher.ts") --outfile $output --windows-icon (Join-Path $root "kras-quick.ico") --windows-title "KRAS Quick" --windows-publisher "HaYanJongSeong" --windows-version "2.1.0.0" --windows-description "KRAS certificate one-line installer and OZ viewer capture" --windows-copyright "Copyright (c) 2026 HaYanJongSeong"
+  bun build --compile --target=bun-windows-x64 (Join-Path $sourceRoot "scripts\kras-quick-launcher.ts") --outfile $output --windows-icon (Join-Path $root "kras-quick.ico") --windows-title "KRAS Quick" --windows-publisher "HaYanJongSeong" --windows-version "2.1.1.0" --windows-description "KRAS certificate one-line installer and OZ viewer capture" --windows-copyright "Copyright (c) 2026 HaYanJongSeong"
 if ($LASTEXITCODE -ne 0) { throw "single EXE build failed" }
 
 Remove-Item -Recurse -Force $staging

@@ -7,6 +7,7 @@ import type { KrasAutoStageResult } from "../scripts/kras-auto-stages.ts";
 import {
 	createKrasManualStage2Result,
 	propertyAutoStagePaths,
+	runKrasAutoStage3,
 } from "../scripts/kras-auto-stages.ts";
 import { withOzTimeout } from "../scripts/kras-oz.ts";
 import {
@@ -36,6 +37,7 @@ import {
 	writeManualStage2ForRoot,
 } from "../scripts/property-auto-runner.ts";
 import type { PropertyWatcherRuntimeBrowser } from "../scripts/property-watcher-runtime.ts";
+import { TEST_PDF, TEST_PNG, TEST_XML } from "./kras-capture-fixture.ts";
 
 function dependencies(
 	calls: string[],
@@ -596,10 +598,23 @@ describe("property auto CLI pipeline", () => {
 		try {
 			await mkdir(paths.directory, { recursive: true });
 			await mkdir(paths.otherDirectory, { recursive: true });
-			await writeFile(paths.pdf, "pdf");
-			await writeFile(paths.pagePng(1), "png");
-			await writeFile(paths.pageXml, "xml");
-			await writeFile(paths.structureJson, "json");
+			await runKrasAutoStage3(
+				{
+					version: 1,
+					stage: 2,
+					status: "completed",
+					address,
+					building: { index: 0, value: "", label: "" },
+				},
+				{
+					url: () => "https://kras.go.kr/oz80/ozhviewer/report.jsp",
+					hasVisibleCaptcha: async () => false,
+					capturePdf: async () => TEST_PDF,
+					capturePagePngs: async () => [TEST_PNG],
+					readReportXml: async () => TEST_XML,
+				},
+				paths,
+			);
 			assert.equal(
 				pickNextAutoTarget(paths, stage1, new Map(), "land-only"),
 				undefined,

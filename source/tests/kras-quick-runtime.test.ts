@@ -6,6 +6,7 @@ import {
 	mkdtemp,
 	readdir,
 	readFile,
+	realpath,
 	rm,
 	writeFile,
 } from "node:fs/promises";
@@ -368,7 +369,9 @@ describe("quick terminal", () => {
 		it(`routes ${shell} PowerShell when WT is ${wt}`, {
 			skip: process.platform !== "win32",
 		}, async (t) => {
-			const cwd = await mkdtemp(join(tmpdir(), "한글 ;%' quick-"));
+			const cwd = await realpath(
+				await mkdtemp(join(tmpdir(), "한글 ;%' quick-")),
+			);
 			t.after(() => rm(cwd, { recursive: true, force: true }));
 			const root = process.env["SystemRoot"] ?? "";
 			const shells = {
