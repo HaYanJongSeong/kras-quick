@@ -21,6 +21,7 @@ import {
 	ledgerLabelForAddress,
 	normalizeAddress,
 } from "./kras-domain.ts";
+import { lookupAfterNavigation } from "./kras-navigation.ts";
 import {
 	createKrasOzViewerSurface,
 	KrasOzViewerSelectionError,
@@ -310,14 +311,16 @@ function createPlaywrightPage(
 		url: () => page.url(),
 		lookup: async (address) => {
 			beginViewerRequest();
-			return evaluateKras(lookupEvaluation, {
-				mode: "lookup",
-				address: normalizeAddress(address),
-				darkMode: false,
-				darkModeCss: KRAS_DARK_MODE_CSS,
-				hasLegalRi: addressHasLegalRi(address),
-				ledgerLabel: ledgerLabelForAddress(address),
-			});
+			return lookupAfterNavigation(page, () =>
+				evaluateKras(lookupEvaluation, {
+					mode: "lookup",
+					address: normalizeAddress(address),
+					darkMode: false,
+					darkModeCss: KRAS_DARK_MODE_CSS,
+					hasLegalRi: addressHasLegalRi(address),
+					ledgerLabel: ledgerLabelForAddress(address),
+				}),
+			);
 		},
 		readBuildingOptions: () => page.evaluate(readBuildingOptionsEvaluation),
 		selectBuilding: (value) =>

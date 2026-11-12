@@ -1,8 +1,8 @@
-# KRAS Quick v2.1.1
+# KRAS Quick v2.1.2
 
 KRAS/OZ 토지·건축물 조회 자동화 도구입니다.
 
-GitHub 릴리스와 npm 패키지 `kras-quick`의 공개 버전은 2.1.1입니다.
+2.1.2 설치 안내입니다. GitHub와 npm은 별도로 게시되며 각 채널 공개 후 해당 설치 명령을 사용할 수 있습니다.
 
 ## GitHub 설치
 
@@ -12,25 +12,25 @@ PowerShell에 아래 명령을 붙여 넣으면 설치가 시작됩니다. `git`
 irm https://raw.githubusercontent.com/HaYanJongSeong/kras-quick/main/install.ps1 | iex
 ```
 
-설치 스크립트는 GitHub Release `v2.1.1`에서 EXE와 runtime ZIP을 받습니다. 각 파일의 SHA-256을 확인한 뒤 `Downloads\kras-quick.exe`를 설치하고 실행합니다.
+설치 스크립트는 GitHub Release `v2.1.2`에서 EXE와 runtime ZIP을 받습니다. 각 파일의 SHA-256을 확인한 뒤 `Downloads\kras-quick.exe`를 설치하고 실행합니다.
 
 ## 수동 설치
 
-[v2.1.1 Release](https://github.com/HaYanJongSeong/kras-quick/releases/tag/v2.1.1)에서 다음 파일을 같은 폴더에 다운로드합니다.
+[v2.1.2 Release](https://github.com/HaYanJongSeong/kras-quick/releases/tag/v2.1.2)에서 다음 파일을 같은 폴더에 다운로드합니다.
 
 ```text
 kras-quick.exe
-kras-quick-runtime-v2.1.1.zip
+kras-quick-runtime-v2.1.2.zip
 ```
 
 두 파일을 받은 뒤 `kras-quick.exe`를 실행하세요.
 
 ## npm으로 설치
 
-공개 npm 패키지 이름은 `kras-quick`이며 `latest`는 2.1.1입니다. npm·npx는 Node.js 18 이상이 필요합니다.
+공개 npm 패키지 이름은 `kras-quick`입니다. npm·npx는 Node.js 18 이상이 필요합니다.
 
 ```powershell
-npm install -g kras-quick@2.1.1
+npm install -g kras-quick@2.1.2
 kras-quick
 ```
 
@@ -53,6 +53,13 @@ npx --offline --yes --package="$env:USERPROFILE\Downloads\kras-quick-test" kras-
 - 인터넷 연결(최초 runtime 다운로드 또는 KRAS 조회)
 
 프로그램에서 사용할 브라우저를 선택합니다. Chromium 계열은 업무용 별도 프로필과 CDP 연결을 사용합니다. Firefox는 한국어로 실행되며, 프로그램 종료 시 Quick이 연 Firefox 창도 닫힙니다. 기존 개인 프로필은 사용하지 않습니다.
+
+## 2.1.2 변경 사항
+
+- AUTO 보안문자 재시도 번호를 OCR 옵션으로 올바르게 전달해 1·2·3차 판독 설정을 구분합니다. 실패한 후보는 다시 제출하지 않으며 다른 유효 후보를 얻지 못하면 수동 입력으로 전환합니다.
+- 주소 조회 중 페이지 이동으로 실행 문맥이 사라지면 문서 로딩을 기다려 같은 조회를 최대 3회 시도합니다. 보안문자 제출이나 결과 저장을 통째로 재실행하지 않습니다.
+- AUTO 종료 시 처리 실패 주소·원본 입력 PNU·오류 사유를 별도로 안내합니다. 재처리에 성공한 주소는 실패 목록에서 제거합니다. 목록은 현재 실행의 메모리에 보관하며 별도 파일 저장이나 강제 종료 후 복구는 제공하지 않습니다.
+- runtime ZIP을 .NET의 2인자 압축 해제 호출로 풀어 Windows PowerShell의 `Expand-Archive` 호환 오류를 피합니다.
 
 ## 2.1.1 변경 사항
 

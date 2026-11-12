@@ -3,6 +3,10 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
+	type AutoAddressFailure,
+	formatAutoFailures,
+} from "./kras-auto-failures.ts";
+import {
 	appendDoneBuildingIndex,
 	createKrasAutoStage2Result,
 	createKrasManualStage2Result,
@@ -59,7 +63,7 @@ const watcherRunnerPath = join(
 	"property-watcher-runner.ts",
 );
 
-export const KRAS_QUICK_VERSION = "2.1.1";
+export const KRAS_QUICK_VERSION = "2.1.2";
 
 export const QUICK_ADDRESS_PROMPT =
 	"\n주소 입력 또는 작업 선택\n-: 기본 주소(서울특별시 노원구 월계동 392-19)\n주소: 새 주소 조회\n.: 이 주소의 건물 목록으로 돌아가기\n..: 이 건물의 층-호수로 돌아가기 (집합건물일 때만)\n*: 주소 입력 화면으로 돌아오기\n0: OZ 뷰어 수동 열람 (직전 주소 저장)\nEnter: 종료\n+: 클립보드 붙여넣기 (입력 후 Enter)\n입력 > ";
@@ -622,10 +626,7 @@ type QuickCaptchaOptions = {
 	readonly page: QuickCaptchaPage;
 	readonly terminal: TerminalReader;
 	readonly mode: QuickAddressInput;
-	readonly recognize?: (
-		pngBase64: string,
-		attempt?: 1 | 2 | 3,
-	) => Promise<string | null>;
+	readonly recognize?: typeof recognizeCaptchaCandidate;
 };
 
 export async function handleQuickCaptcha(
@@ -648,7 +649,7 @@ export async function handleQuickCaptcha(
 		let tesseractMissing = false;
 		const triedCandidates = new Set<string>();
 		const maxAttempts = 3;
-		for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+		for (const attempt of [1, 2, 3] as const) {
 			const pngBase64 = await options.page.captureCaptchaImage();
 			if (pngBase64 === null)
 				throw new KrasAutoCaptchaError(
@@ -658,7 +659,7 @@ export async function handleQuickCaptcha(
 			try {
 				candidate = await (options.recognize ?? recognizeCaptchaCandidate)(
 					pngBase64,
-					attempt as 1 | 2 | 3,
+					{ attempt },
 				);
 			} catch (error: unknown) {
 				if (
@@ -1712,6 +1713,7 @@ async function main(): Promise<void> {
 		}
 		if (args[0] === "quick") {
 			const terminal = createTerminal();
+			const failedAutoAddresses = new Map<string, AutoAddressFailure>();
 			try {
 				process.stdout.write(`kras-quick v${KRAS_QUICK_VERSION}\n`);
 				const browserRoot = process.env["KRAS_QUICK_ROOT"] ?? process.cwd();
@@ -2164,6 +2166,7 @@ async function main(): Promise<void> {
 								quickAddress,
 								true,
 							);
+							failedAutoAddresses.delete(quickAddress);
 						} else {
 							const reusable = await runPropertyKrasWorkflow(
 								quickAddress,
@@ -2214,6 +2217,13 @@ async function main(): Promise<void> {
 								);
 							}
 						} else {
+							if (autoMode || batchRunning) {
+								failedAutoAddresses.set(quickAddress, {
+									input: address,
+									reason:
+										error instanceof Error ? error.message : String(error),
+								});
+							}
 							process.stderr.write(
 								`작업 실패: ${error instanceof Error ? error.message : String(error)}\n`,
 							);
@@ -2240,7 +2250,9 @@ async function main(): Promise<void> {
 					} else {
 						if (batchRunning) {
 							batchRunning = false;
-							process.stdout.write("일괄처리 완료.\n");
+							process.stdout.write("일괄처리 종료.\n");
+							process.stdout.write(formatAutoFailures(failedAutoAddresses));
+							failedAutoAddresses.clear();
 							process.stdout.write(
 								`지번 없음 ${missingParcelAddresses.size}건\n`,
 							);
@@ -2267,6 +2279,7 @@ async function main(): Promise<void> {
 				process.exitCode = 1;
 			} finally {
 				setAutoOutputColor(false);
+				process.stdout.write(formatAutoFailures(failedAutoAddresses));
 				terminal.close();
 				await shutdownKrasBrowser();
 			}

@@ -1,5 +1,28 @@
 # 배포 검증 기록
 
+## 2.1.2 (2026-11-12, 배포 준비)
+
+- AUTO 보안문자 재시도 번호의 OCR 옵션 전달 오류를 수정했다. 실제 OCR 함수와 연결한 회귀검사로 수정 전 동일 설정·후보 반복을 재현했고 수정 후 1·2·3차 설정 구분과 중복 후보 제출 방지·수동 전환을 확인했다. 실제 사이트 보안문자나 로그인을 제출하지 않았다.
+- 실제 Edge의 격리된 로컬 응답 페이지에서 `Execution context was destroyed` 오류를 재현했다. 문서 로딩을 기다린 뒤 같은 조회가 2회차에 복구되는 것을 확인했다. 이 재시도는 주소 조회에만 적용하며 보안문자 제출·저장 작업 전체를 반복하지 않는다.
+- CLI 일괄처리 회귀검사에서 실패 지번·원본 PNU·사유가 종료 요약에 남고, 나머지 주소가 계속 처리되며 동일 주소의 재처리가 성공하면 실패 목록에서 제거되는 것을 확인했다. 실패 목록은 현재 실행의 메모리·콘솔 요약이며 파일 저장이나 강제 종료 후 복구 기능은 아니다.
+- Windows PowerShell에서 `Expand-Archive`의 `ExtractToDirectory` 인수 호환 오류 3건을 재현했다. .NET의 2인자 호출로 교체한 뒤 관련 16/16, 전체 437/437, 타입검사·전체 린트가 통과했다. 시스템 PowerShell 모듈은 변경하지 않았다.
+- 기존 약 104MB runtime ZIP의 SHA-256 확인·한글/공백/따옴표 경로 추출·네이티브 Node/Tesseract 실행·캐시 재사용을 검증했다. 아래 이전 버전의 현장 성공 기록과 새 2.1.2 배포본 검증은 구분한다.
+- 새 EXE의 파일 버전 `2.1.2.0`과 외부 ZIP의 실행 버전 `2.1.2`가 일치한다. 한글·공백·따옴표를 포함한 설치 경로에서 새 EXE의 첫 실행·추출·브라우저 선택 전 `0` 취소와 두 번째 캐시 재사용을 확인했다.
+- 새 ZIP에 포함된 수정 소스 5개의 SHA-256이 PC 소스와 일치하며 새 navigation·실패 집계 모듈도 포함됐다. 추출한 실제 runtime의 import 검사와 `npm audit --omit=dev` 경고 0건을 확인했다.
+- 전체 개발용 포터블의 OpenCode 플러그인 → Effect 의존성에는 중간 등급 경고 2건이 남아 있다(`GHSA-chp3-j5qr-2vfr`). 이번 EXE용 축소 ZIP에는 해당 플러그인·Effect가 없으며, 관련 없는 플러그인 다운그레이드는 하지 않았다. 축소 runtime의 감사 결과와 전체 포터블 결과를 혼동하지 않는다.
+- 새 npm 준비본은 `kras-quick@2.1.2`이며 bin·LICENSE·package.json·README만 포함한다. 실행기 검사 1/1과 게시 도우미 자체검사를 통과했다. 공개 게시·설치 결과는 반영 후 별도로 기록한다.
+
+```text
+kras-quick.exe
+F6DB476BDF664A5F4C51BC24998D3DBCC3514A970F7C3E322410C64F5ABC606A
+
+kras-quick-runtime-v2.1.2.zip
+C6D2CC48BF2C26A80DEE7E0453A1379A2B8100CBC69D439BED4445F13B0D703A
+
+kras-quick@2.1.2
+sha512-NOiv6aUxgXbj1FuTsVLNXUhReZs+F/4fwaJ1xRmelczpfXVkFIQpy6rIBFHwIXrBe8AaLUgb0tPlrXfFH/PifA==
+```
+
 ## 2.1.1 정식 게시 (2026-10-27)
 
 - GitHub Release `v2.1.1`의 EXE·runtime ZIP·체크섬 2개를 공개했다. 네 자산의 익명 다운로드와 SHA-256 대조가 통과했다. 기존 릴리스·태그는 보존했다.

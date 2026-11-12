@@ -54,7 +54,11 @@ function dependencies(
 	};
 }
 
-function driveQuick(inputs: readonly string[], pauseAfter = 0): unknown {
+function driveQuick(
+	inputs: readonly string[],
+	pauseAfter = 0,
+	failAt = 0,
+): unknown {
 	const runnerUrl = new URL(
 		"../scripts/property-auto-runner.ts",
 		import.meta.url,
@@ -82,7 +86,8 @@ function driveQuick(inputs: readonly string[], pauseAfter = 0): unknown {
     let autoCalls = 0
     globalThis.__quickAuto = async (address, _terminal, _root, scope) => {
       events.push(["auto", address, scope])
-      if (++autoCalls === ${pauseAfter}) pending.push("일시정지")
+      if (++autoCalls === ${failAt}) throw new Error("MOCK_NAVIGATION_FAILURE")
+      if (autoCalls === ${pauseAfter}) pending.push("일시정지")
       return { totalAggregateBuildings: 0, processedAggregateBuildings: 0 }
     }
     globalThis.__quickManual = async (address, _terminal, options) => {
@@ -100,6 +105,12 @@ function driveQuick(inputs: readonly string[], pauseAfter = 0): unknown {
       close: () => undefined,
     }
     for (const [name, overrides] of [
+      ["kras-auto-failures.ts", {
+        formatAutoFailures: (failures) => {
+          if (failures.size > 0) events.push(["failures", [...failures]])
+          return ""
+        },
+      }],
       ["kras-browser.ts", {
         prepareKrasQuickBrowser: async () => true,
         shutdownKrasBrowser: async () => {
@@ -154,6 +165,37 @@ describe("quick address loop", () => {
 	const address = "서울특별시 노원구 월계동 392-19";
 	const otherAddress = "서울특별시 중구 태평로1가 31";
 	const addedAddress = "서울특별시 용산구 용산동2가 5-227";
+	it("reports a failed parcel after continuing the remaining batch", () => {
+		// Given
+		const pnu = "1117013000102580367";
+		const normalized = "서울특별시 용산구 이태원동 258-367";
+		const inputs = ["AUTO", "...", pnu, otherAddress, "시작", "1"];
+		// When
+		const events = driveQuick(inputs, 0, 1);
+		// Then
+		assert.deepEqual(events, [
+			...inputs.map((input) => ["input", input]),
+			["auto", normalized, "land-only"],
+			["auto", otherAddress, "land-only"],
+			[
+				"failures",
+				[[normalized, { input: pnu, reason: "MOCK_NAVIGATION_FAILURE" }]],
+			],
+		]);
+	});
+
+	it("removes an earlier failure when the same AUTO parcel later succeeds", () => {
+		// Given
+		const inputs = ["AUTO", "...", address, address, "시작", "1"];
+		// When
+		const events = driveQuick(inputs, 0, 1);
+		// Then
+		assert.deepEqual(events, [
+			...inputs.map((input) => ["input", input]),
+			["auto", address, "land-only"],
+			["auto", address, "land-only"],
+		]);
+	});
 
 	for (const { name, inputs, expected } of [
 		{
@@ -720,9 +762,9 @@ describe("property auto CLI pipeline", () => {
 			},
 			terminal: { question: async () => "", close: () => undefined },
 			mode: { kind: "auto" },
-			recognize: async (_png, attempt) => {
-				calls.push(`ocr:${attempt}`);
-				return candidates[(attempt ?? 1) - 1] ?? null;
+			recognize: async (_png, options) => {
+				calls.push(`ocr:${options?.attempt}`);
+				return candidates[(options?.attempt ?? 1) - 1] ?? null;
 			},
 		});
 		assert.deepEqual(calls, [

@@ -11,6 +11,7 @@ import {
 	type TesseractRunner,
 	TesseractTimeoutError,
 } from "../scripts/kras-tesseract.ts";
+import { handleQuickCaptcha } from "../scripts/property-auto-runner.ts";
 
 const PNG_BASE64 = Buffer.from("png fixture").toString("base64");
 
@@ -21,6 +22,97 @@ async function withTempRoot(t: TestContext): Promise<string> {
 }
 
 describe("recognizeCaptchaCandidate", () => {
+	it("uses distinct OCR modes through the AUTO retry path before the third submission succeeds", async (t) => {
+		// Given
+		const root = await withTempRoot(t);
+		const modes: string[] = [];
+		const submitted: string[] = [];
+		const runner: TesseractRunner = async (_executable, args) => {
+			const mode = args[args.indexOf("--psm") + 1] ?? "";
+			modes.push(mode);
+			return {
+				stdout: mode === "7" ? "11111" : mode === "8" ? "22222" : "33333",
+				stderr: "",
+			};
+		};
+
+		// When
+		await handleQuickCaptcha({
+			mode: { kind: "auto" },
+			page: {
+				renderCaptchaTerminal: async () => "fixture",
+				captureCaptchaImage: async () => PNG_BASE64,
+				fillCaptchaAndSubmit: async (candidate) => {
+					submitted.push(candidate);
+					return candidate === "33333" ? "success" : "error";
+				},
+			},
+			terminal: {
+				question: async () => {
+					assert.fail(
+						"three distinct OCR modes must run before manual fallback",
+					);
+				},
+				close: () => undefined,
+			},
+			recognize: (image, options) =>
+				recognizeCaptchaCandidate(image, {
+					...options,
+					binaryPath: join(root, "tesseract.exe"),
+					tempRoot: root,
+					runner,
+				}),
+		});
+
+		// Then
+		assert.deepEqual(modes, ["7", "8", "13"]);
+		assert.deepEqual(submitted, ["11111", "22222", "33333"]);
+	});
+
+	it("skips repeated AUTO candidates and falls back to manual input after all OCR modes", async (t) => {
+		// Given
+		const root = await withTempRoot(t);
+		const modes: string[] = [];
+		const submitted: string[] = [];
+		let manualInputs = 0;
+		const runner: TesseractRunner = async (_executable, args) => {
+			modes.push(args[args.indexOf("--psm") + 1] ?? "");
+			return { stdout: "11111", stderr: "" };
+		};
+
+		// When
+		await handleQuickCaptcha({
+			mode: { kind: "auto" },
+			page: {
+				renderCaptchaTerminal: async () => "fixture",
+				captureCaptchaImage: async () => PNG_BASE64,
+				fillCaptchaAndSubmit: async (candidate) => {
+					submitted.push(candidate);
+					return candidate === "54321" ? "success" : "error";
+				},
+			},
+			terminal: {
+				question: async () => {
+					manualInputs += 1;
+					return "54321";
+				},
+				close: () => undefined,
+			},
+			recognize: (image, options) =>
+				recognizeCaptchaCandidate(image, {
+					...options,
+					binaryPath: join(root, "tesseract.exe"),
+					tempRoot: root,
+					runner,
+				}),
+		});
+
+		// Then
+		assert.deepEqual(modes, ["7", "8", "13"]);
+		assert.deepEqual(submitted, ["11111", "54321"]);
+		assert.equal(manualInputs, 1);
+	});
+
 	it("resolves bundled Tesseract beside the portable runtime, not beside node", () => {
 		const nodePath = "C:\\runtime\\node\\node.exe";
 		assert.equal(

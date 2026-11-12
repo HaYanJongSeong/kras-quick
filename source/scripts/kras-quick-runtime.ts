@@ -227,7 +227,7 @@ async function downloadZip(
 async function extractZip(zipPath: string, extractDir: string): Promise<void> {
 	const escapedZip = zipPath.replaceAll("'", "''");
 	const escapedDir = extractDir.replaceAll("'", "''");
-	const code = `$ErrorActionPreference='Stop'; Expand-Archive -LiteralPath '${escapedZip}' -DestinationPath '${escapedDir}' -Force`;
+	const code = `$ErrorActionPreference='Stop'; Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory('${escapedZip}', '${escapedDir}')`;
 	const exitCode = await runProcess("powershell.exe", [
 		"-NoProfile",
 		"-NonInteractive",
