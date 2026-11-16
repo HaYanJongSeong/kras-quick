@@ -227,11 +227,12 @@ pub fn run_kras_auto_stage3<S: KrasOzViewerSurface>(
 			if let Some(conflict) = [&pdf_path, &xml_path, &data_json_path].into_iter().find(|path| std::path::Path::new(path).is_file()) {
 				return Err(format!("기존 산출물을 보존하기 위해 저장을 중단합니다: {conflict}").into());
 			}
-			std::fs::write(&pdf_path, &capture.pdf)?;
+			use crate::exclusive_output::write_new;
+			write_new(&pdf_path, &capture.pdf)?;
 			let png_paths: Vec<String> = Vec::new();
 			let xml_bytes = capture.page_xml.as_bytes();
-			std::fs::write(&xml_path, xml_bytes)?;
-			std::fs::write(&data_json_path, &data_json_bytes)?;
+			write_new(&xml_path, xml_bytes)?;
+			write_new(&data_json_path, &data_json_bytes)?;
 			let oz = create_oz_structure(&xml_data);
 			// TS integritySchema(version/building/floorRoom/pdf/pagePngs/pageXml) —
 			// 아티팩트(파일·바이트·sha256)가 있어야 verifyKrasOutput 통과 후 완료 판정이 된다.

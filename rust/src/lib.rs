@@ -5,6 +5,8 @@ pub mod kras_browser_process;
 pub mod auto_batch;
 pub mod cdp_surface;
 pub mod kras_auto_stages;
+mod exclusive_output;
+pub mod batch_input;
 pub mod property_watcher_lifecycle;
 pub mod kras_launcher;
 pub mod kras_dark;

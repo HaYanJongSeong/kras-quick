@@ -16,7 +16,7 @@ Windows x64와 Node.js 18 이상이 필요합니다. Node.js 없이 사용하려
 
 ## 산출물
 
-직접 실행하면 EXE 폴더, npx로 실행하면 명령을 실행한 폴더에 저장합니다.
+직접 실행하면 EXE 폴더에 저장합니다. npx는 `%USERPROFILE%\Downloads\kras-quick.exe`를 설치·실행하고, `%USERPROFILE%\Downloads\KRAS\지번\`에 저장합니다. 기존 업무자료는 이동·삭제하지 않습니다. Windows에서 다운로드 폴더를 다른 위치로 변경한 경우에도 현재 설치기는 위 고정 경로를 사용합니다.
 
 ```text
 KRAS/지번/

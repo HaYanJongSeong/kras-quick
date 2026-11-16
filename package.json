@@ -1,6 +1,6 @@
 {
   "name": "kras-quick",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "KRAS Quick Windows launcher with Rust runtime",
   "repository": { "type": "git", "url": "https://github.com/HaYanJongSeong/kras-quick.git" },
   "license": "MIT",

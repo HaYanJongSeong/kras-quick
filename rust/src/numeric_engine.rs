@@ -363,7 +363,7 @@ mod tests {
 		// 3 timesteps: [5,5,10] → "5" (collapse 5s, skip blank)
 		let mut scores = vec![0.0f32; 3 * 11];
 		// t0: class5 high
-		scores[0 * 11 + 4] = 10.0;
+		scores[4] = 10.0;
 		// t1: class4 high (repeat → collapsed)
 		scores[1 * 11 + 4] = 10.0;
 		// t2: class10 (blank)

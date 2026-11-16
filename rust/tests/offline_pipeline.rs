@@ -378,6 +378,21 @@ fn offline_pipeline_from_lookup_to_final_pdf() {
 			&paths.output_paths(), &target.building, target.floor_room.as_ref()
 		), "통합 로그에서 각 층호를 독립 검증해야 함");
 	}
+	let mut legacy = structure.clone();
+	legacy["_krasIntegrity"]["version"] = serde_json::json!(2);
+	legacy["_krasIntegrity"].as_object_mut().unwrap().remove("dataJson");
+	let legacy_path = kras_quick::kras_output::with_building_suffix(
+		&format!("{}\\oz-structure.json", paths.other_directory), &paths.other_directory,
+		&kras_quick::kras_output::output_label(&target),
+	);
+	std::fs::write(&legacy_path, serde_json::to_vec(&legacy).unwrap()).unwrap();
+	assert!(verify_kras_output(&paths.output_paths(), &legacy_path, &target));
+	let json_bytes = std::fs::read(&output.data_json).unwrap();
+	std::fs::write(&output.data_json, b"damaged-json").unwrap();
+	assert!(!kras_quick::kras_output::is_kras_stage3_output_complete(
+		&paths.output_paths(), &stage2.building, stage2.floor_room.as_ref()
+	), "legacy verification must not bypass a damaged current JSON");
+	std::fs::write(&output.data_json, json_bytes).unwrap();
 	std::fs::write(&output.pdf, b"damaged").unwrap();
 	assert!(!kras_quick::kras_output::is_kras_stage3_output_complete(
 		&paths.output_paths(), &stage2.building, stage2.floor_room.as_ref()

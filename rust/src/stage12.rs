@@ -174,6 +174,7 @@ fn auto_captcha_attempts(
 		crate::task_screen::task_status(&format!("AUTO 보안문자 제출 ({attempt}/5)\n"));
 		match submit(&candidate).as_str() {
 			"success" => return Ok(None),
+			"access_blocked" => return Err("접속 차단 안내가 감지되어 처리를 중단했습니다.".into()),
 			"login_expired" => return Err("로그인이 만료되었습니다.".into()),
 			"need_lookup" => return Err("건물 재조회가 필요합니다.".into()),
 			_ => {}
@@ -224,6 +225,7 @@ fn manual_captcha_entries(
 		}
 		match submit(candidate).as_str() {
 			"success" => return Ok(()),
+			"access_blocked" => return Err("접속 차단 안내가 감지되어 처리를 중단했습니다.".into()),
 			"login_expired" => return Err("로그인이 만료되었습니다.".into()),
 			"need_lookup" => return Err("건물 재조회가 필요합니다.".into()),
 			_ => println!("보안문자 제출이 실패했습니다. 화면을 확인해 주세요."),
@@ -234,6 +236,19 @@ fn manual_captcha_entries(
 #[cfg(test)]
 mod captcha_submission_tests {
 	use super::{auto_captcha_attempts, manual_captcha_entries, reserve_captcha_candidate};
+
+	#[test]
+	fn access_block_stops_after_one_submission_without_fallback() {
+		let mut submissions = 0;
+		let result = auto_captcha_attempts(|_| Some("01234".into()), |_| {
+			submissions += 1;
+			"access_blocked".into()
+		});
+		assert!(result.unwrap_err().to_string().contains("차단"));
+		assert_eq!(submissions, 1);
+		let result = manual_captcha_entries(Vec::new(), || Ok(Some("01234".into())), |_| "access_blocked".into());
+		assert!(result.unwrap_err().to_string().contains("차단"));
+	}
 
 	#[test]
 	fn manual_input_rejects_auto_history_and_invalid_text_before_success() {
@@ -515,6 +530,7 @@ pub fn capture_captcha_image(surface: &crate::cdp_surface::CdpSurface) -> Option
 const FILL_CAPTCHA_JS: &str = r##"async (captchaText) => {
 	const isLoginUrl = () => { try { return /\/login(?:\/|$)/i.test(new URL(location.href).pathname); } catch { return false; } };
 	const classify = (text) => {
+		if (/(접속|접근|이용).{0,15}(차단|제한)|IP.{0,20}(차단|제한)|비정상.{0,10}접근/i.test(text)) return "access_blocked";
 		if (text.includes("도면정보") || text.includes("도호가 불일치") || text.includes("출력축척")) return "confirm";
 		if (text.includes("신청물건을 먼저 조회")) return "need_lookup";
 		if (text.includes("로그인이 만료되었습니다")) return "login_expired";
@@ -522,6 +538,8 @@ const FILL_CAPTCHA_JS: &str = r##"async (captchaText) => {
 		return null;
 	};
 	if (isLoginUrl()) return "login_expired";
+	const existingDialog = document.querySelector('.swal2-container.swal2-backdrop-show');
+	if (existingDialog !== null && classify(existingDialog.textContent ?? "") === "access_blocked") return "access_blocked";
 	const captcha = document.querySelectorAll("#captcha");
 	const viewButton = document.querySelectorAll("button[onclick='certView.fnProcessCert();']");
 	if (captcha.length !== 1 || viewButton.length !== 1) return "error";
@@ -535,6 +553,7 @@ const FILL_CAPTCHA_JS: &str = r##"async (captchaText) => {
 		const el = document.querySelector('.swal2-container.swal2-backdrop-show');
 		const dialog = el === null ? null : (el.textContent ?? "").replace(/\s+/g, " ").trim();
 		const kind = dialog === null ? null : classify(dialog);
+		if (kind === "access_blocked") return "access_blocked";
 		if (kind === null) { await new Promise((r) => setTimeout(r, 250)); continue; }
 		if (kind === "need_lookup") {
 			document.querySelector('.swal2-container.swal2-backdrop-show .swal2-confirm')?.click();

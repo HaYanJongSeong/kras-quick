@@ -11,7 +11,7 @@ use kras_quick::kras_auto_stages::{
 };
 use kras_quick::kras_output::KrasBuildingOption;
 use kras_quick::quick_address::{
-	active_address_prompt, append_auto_addresses, classify_menu_input, parse_auto_batch_scope_answer,
+	active_address_prompt, append_auto_addresses, classify_menu_input,
 	split_quick_address_batch, AutoBatchScope, MenuAction, AUTO_SCOPE_PROMPT, DEFAULT_ADDRESS,
 	EXIT_CONFIRM_PROMPT, LOGIN_PROMPT, QUICK_ADDRESS_PROMPT,
 };
@@ -441,14 +441,21 @@ fn lookup_navigation_is_not_repeated_on_current_form() {
 	assert!(needs_lookup_navigation("https://other.invalid/kras/cert/certView.do"));
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum AddressAttempt { Completed, NoParcel, Failed }
+
 fn run_address_with_options(address: &str, mode: RunMode, discovered_floors: &mut Vec<AutoBuilding>, reuse_loaded_options: bool) -> bool {
+	run_address_attempt(address, mode, discovered_floors, reuse_loaded_options) == AddressAttempt::Completed
+}
+
+fn run_address_attempt(address: &str, mode: RunMode, discovered_floors: &mut Vec<AutoBuilding>, reuse_loaded_options: bool) -> AddressAttempt {
 	let started = std::time::Instant::now();
 	let mut surface = match CdpSurface::connect(ENDPOINT) {
 		Ok(s) => s,
 		Err(e) => {
 			eprintln!("CDP 연결 실패: {e}");
 			eprintln!("브라우저가 실행 중인지 확인하세요 (디버깅 포트 9333).");
-			return false;
+			return AddressAttempt::Failed;
 		}
 	};
 	if !reuse_loaded_options && needs_lookup_navigation(&surface.url()) {
@@ -456,14 +463,14 @@ fn run_address_with_options(address: &str, mode: RunMode, discovered_floors: &mu
 		"Page.navigate",
 		serde_json::json!({"url": "https://www.kras.go.kr/kras/cert/certView.do"}),
 	);
-	if let Err(error) = navigation { eprintln!("KRAS 페이지 이동 실패: {error}"); return false; }
+	if let Err(error) = navigation { eprintln!("KRAS 페이지 이동 실패: {error}"); return AddressAttempt::Failed; }
 	let ready = surface.send_cdp("Runtime.evaluate", serde_json::json!({
 		"expression": "(async()=>{const end=Date.now()+5000;while(Date.now()<end){if(location.pathname==='/kras/cert/certView.do'&&document.readyState!=='loading'&&typeof certView!=='undefined'&&document.querySelector('#bldgSeCd'))return true;await new Promise(r=>setTimeout(r,50));}return false;})()",
 		"returnByValue": true, "awaitPromise": true
 	}));
 	if !matches!(ready, Ok(ref result) if result["result"]["value"].as_bool() == Some(true)) {
 		kras_quick::task_screen::task_status("조회 화면 준비 실패: 로그인 또는 브라우저 상태를 확인해 주세요.\n");
-		return false;
+		return AddressAttempt::Failed;
 	}
 	if let Ok(s) = CdpSurface::connect(ENDPOINT) {
 		surface = s;
@@ -488,7 +495,8 @@ fn run_address_with_options(address: &str, mode: RunMode, discovered_floors: &mu
 		Ok(w) => w,
 		Err(e) => {
 			eprintln!("Stage 1 실패: {e}");
-			return false;
+			kras_quick::task_screen::update_task_phase(&format!("조회 실패: {e}"));
+			return AddressAttempt::Failed;
 		}
 	};
 	kras_quick::task_screen::task_status(&format!("Stage 1 결과: {:?}\n", stage1_result));
@@ -509,14 +517,15 @@ fn run_address_with_options(address: &str, mode: RunMode, discovered_floors: &mu
 		let _ = std::fs::create_dir_all(parent);
 	}
 	if let Err(error) = kras_quick::output_log::append(&paths.stage1_json, "stage1", &stage1_json) {
-		eprintln!("단계 기록 실패: {error}"); return false;
+		eprintln!("단계 기록 실패: {error}"); return AddressAttempt::Failed;
 	}
 
 	if workflow.return_to_address {
 		println!("주소 입력 화면으로 돌아갑니다.");
-		return false;
+		return AddressAttempt::Failed;
 	}
 	let Some(stage2_ws) = workflow.stage2 else {
+		if stage1_result.reason.as_deref() == Some("no_parcel") { return AddressAttempt::NoParcel; }
 		if stage1_result.status != "completed" {
 			eprintln!("Stage 1이 차단되었습니다: {:?}", stage1_result.reason);
 		} else if workflow.awaiting_user {
@@ -524,7 +533,7 @@ fn run_address_with_options(address: &str, mode: RunMode, discovered_floors: &mu
 		} else {
 			eprintln!("Stage 2를 완료하지 못했습니다.");
 		}
-		return false;
+		return AddressAttempt::Failed;
 	};
 
 	let building_index = stage2_ws.building.index;
@@ -560,14 +569,14 @@ fn run_address_with_options(address: &str, mode: RunMode, discovered_floors: &mu
 		})).collect::<Vec<_>>(),
 	});
 	if let Err(error) = kras_quick::output_log::append(&paths.stage2_json, "stage2", &stage2_json) {
-		eprintln!("단계 기록 실패: {error}"); return false;
+		eprintln!("단계 기록 실패: {error}"); return AddressAttempt::Failed;
 	}
 	kras_quick::task_screen::update_task_phase("Stage 2 선택 완료");
 	kras_quick::task_screen::advance_task_progress(2);
 	if stage2.building.value.is_empty() {
 		if let Err(error) = kras_quick::stage12::select_building(&surface, "") {
 			kras_quick::task_screen::task_status(&format!("토지 선택 실패: {error}\n"));
-			return false;
+			return AddressAttempt::Failed;
 		}
 	}
 
@@ -579,7 +588,7 @@ fn run_address_with_options(address: &str, mode: RunMode, discovered_floors: &mu
 	) {
 		kras_quick::task_screen::task_status(&format!("이미 출력됨 — 캡처 생략: {address}\n"));
 		kras_quick::task_screen::update_task_phase("이미 출력됨 — 캡처 생략");
-		return true;
+		return AddressAttempt::Completed;
 	}
 
 	// 캡차 처리
@@ -587,7 +596,7 @@ fn run_address_with_options(address: &str, mode: RunMode, discovered_floors: &mu
 		Ok(pages) => pages.into_iter().map(|page| page.ws_url).collect::<Vec<_>>(),
 		Err(error) => {
 			eprintln!("OZ 기존 탭 확인 실패: {error}");
-			return false;
+			return AddressAttempt::Failed;
 		}
 	};
 	kras_quick::task_screen::task_status("보안문자 처리 중...\n");
@@ -599,7 +608,8 @@ fn run_address_with_options(address: &str, mode: RunMode, discovered_floors: &mu
 	};
 	if let Err(e) = captcha_result {
 		eprintln!("{e}");
-		return false;
+		kras_quick::task_screen::update_task_phase(&format!("보안문자 중단: {e}"));
+		return AddressAttempt::Failed;
 	}
 	kras_quick::task_screen::advance_task_progress(3);
 
@@ -636,7 +646,7 @@ fn run_address_with_options(address: &str, mode: RunMode, discovered_floors: &mu
 		}
 		Err(e) => {
 			eprintln!("OZ 뷰어 연결 실패: {e}");
-			return false;
+			return AddressAttempt::Failed;
 		}
 	};
 
@@ -670,7 +680,9 @@ fn run_address_with_options(address: &str, mode: RunMode, discovered_floors: &mu
 		}
 	}
 
-	matches!(stage3_result, Ok(KrasAutoStage3Result::Completed { .. }))
+	if matches!(stage3_result, Ok(KrasAutoStage3Result::Completed { .. })) {
+		AddressAttempt::Completed
+	} else { AddressAttempt::Failed }
 }
 
 /// 직접 실행은 EXE 폴더, npx는 실행기가 전달한 호출 폴더를 사용한다.
@@ -704,39 +716,20 @@ fn confirm_quit() -> bool {
 }
 
 /// 일괄처리 범위 선택(TS askAutoBatchScope).
-fn ask_auto_batch_scope() -> AutoBatchScope {
-	loop {
+fn ask_auto_batch_scope() -> Option<AutoBatchScope> {
+	kras_quick::batch_input::choose_scope(|| {
 		let answer = read_line(AUTO_SCOPE_PROMPT);
-		match parse_auto_batch_scope_answer(&answer) {
-			Some(scope) => return scope,
-			None => println!("1, 2 또는 3을 입력해 주세요."),
-		}
-	}
+		if lock_reader().is_eof() { None } else { Some(answer) }
+	})
 }
 
 /// 대기 목록 수집(TS collectAutoBatch + readQuickAddress ignoreEmpty).
 /// 빈 줄(Enter)은 무시하고 `시작` 또는 EOF에서 끝낸다.
-fn collect_auto_batch(queue: &mut Vec<String>) {
-	loop {
-		let suppress = !queue.is_empty();
+fn collect_auto_batch(queue: &mut Vec<String>) -> bool {
+	kras_quick::batch_input::collect(queue, |suppress| {
 		let input = read_menu_input(if suppress { "" } else { ACTIVE_AUTO_PROMPT });
-		if lock_reader().is_eof() {
-			return;
-		}
-		if input == "시작" {
-			return;
-		}
-		if input.is_empty() {
-			continue;
-		}
-		if input == "..." {
-			continue;
-		}
-		let added = append_auto_addresses(queue, &input);
-		if added > 0 {
-			println!("AUTO 대기 목록에 {added}건 추가됨 (총 {}건).", queue.len());
-		}
-	}
+		if lock_reader().is_eof() && input.is_empty() { None } else { Some(input) }
+	})
 }
 
 const ACTIVE_AUTO_PROMPT: &str = kras_quick::quick_address::AUTO_ADDRESS_PROMPT;
@@ -762,6 +755,7 @@ fn run_auto_batch(queue: &mut Vec<String>, scope: AutoBatchScope) {
 		missing: 0,
 	}));
 	let mut addresses_done: u64 = 0;
+	let mut stopped = false;
 
 	while let Some(raw_address) = queue.first().cloned() {
 		queue.remove(0);
@@ -784,7 +778,6 @@ fn run_auto_batch(queue: &mut Vec<String>, scope: AutoBatchScope) {
 		}
 		let paths = property_auto_stage_paths(&address, quick_output_root().as_deref());
 		// 아직 산출물이 남아 있으면 진행할 대상이 있는지 확인한다.
-		let mut attempt = 1;
 		loop {
 			match state.next_target(&paths, scope) {
 				None => break,
@@ -794,8 +787,8 @@ fn run_auto_batch(queue: &mut Vec<String>, scope: AutoBatchScope) {
 					let reused = state.reuse_loaded_options();
 					// 실제 조회는 주소 1건 단위로 수행한다(첫 시도에서 stage1 확보).
 					let mut discovered_floors = Vec::new();
-					let ok = run_address_with_options(&address, run_mode_for(&target), &mut discovered_floors, reused);
-					if ok {
+					let result = run_address_attempt(&address, run_mode_for(&target), &mut discovered_floors, reused);
+					if result == AddressAttempt::Completed {
 						// TS: 성공한 주소는 실패 목록에서 지워진다
 						failures.delete(&address);
 						let stage1 = read_stage1_from_disk(&address);
@@ -810,14 +803,10 @@ fn run_auto_batch(queue: &mut Vec<String>, scope: AutoBatchScope) {
 						std::thread::sleep(std::time::Duration::from_millis(
 							kras_quick::auto_batch::AUTO_PACING_MS,
 						));
-						attempt = 1;
 						continue;
 					}
 					// 지번 없음은 재시도하지 않는다(TS KrasAutoNoParcelError → 다음 주소)
-					if read_stage1_from_disk(&address)
-						.and_then(|stage1| stage1.reason)
-						.as_deref()
-						== Some("no_parcel")
+					if result == AddressAttempt::NoParcel
 					{
 						if !missing_parcel.contains(&address) {
 							missing_parcel.push(address.clone());
@@ -827,19 +816,15 @@ fn run_auto_batch(queue: &mut Vec<String>, scope: AutoBatchScope) {
 						);
 						break;
 					}
-					if kras_quick::auto_batch::should_retry(attempt) {
-						kras_quick::task_screen::task_status(&format!("AUTO {label} 실패 ({attempt}/{}): 재시도합니다.\n",
-							kras_quick::auto_batch::AUTO_MAX_RETRIES));
-						attempt += 1;
-						continue;
-					}
-					let reason = kras_quick::auto_batch::batch_failed_message(&target);
+					let reason = format!("{label} 처리 중단: 화면과 작업 로그를 확인해 주세요. 자동 재시도하지 않습니다.");
 					eprintln!("{reason}");
 					// TS: failedAutoAddresses.set(quickAddress, { input, reason })
 					failures.set(
 						address.clone(),
 						AutoAddressFailure { input: address.clone(), reason },
 					);
+					queue.insert(0, raw_address.clone());
+					stopped = true;
 					break;
 				}
 			}
@@ -865,6 +850,7 @@ fn run_auto_batch(queue: &mut Vec<String>, scope: AutoBatchScope) {
 			missing: missing_parcel.len() as u64,
 		}));
 		kras_quick::task_screen::finish_task_address(outcome);
+		if stopped { break; }
 	}
 	if state.newly_added() > 0 {
 		println!("출력완료 - {}건이 추가되었습니다", state.newly_added());
@@ -1249,7 +1235,6 @@ return JSON.stringify(out);
 				qa_mode = !qa_mode;
 				if qa_mode {
 					auto_mode = false;
-					pending_queue.clear();
 					println!("=== QA 모드: ON ===");
 				} else {
 					println!("=== QA 모드: OFF ===");
@@ -1264,7 +1249,6 @@ return JSON.stringify(out);
 					println!("AUTO 준비 완료: '...' 입력 시 대규모 처리 모드를 시작합니다.");
 				} else {
 					batch_running = false;
-					pending_queue.clear();
 					kras_quick::task_screen::set_task_auto_mode(false);
 					println!("AUTO 모드 종료.");
 					println!("=== AUTO 모드: OFF ===");
@@ -1275,12 +1259,12 @@ return JSON.stringify(out);
 					println!("먼저 AUTO를 입력해 대규모 처리 모드를 켜 주세요.");
 					continue;
 				}
-				collect_auto_batch(&mut pending_queue);
+				if !collect_auto_batch(&mut pending_queue) { continue; }
 				if pending_queue.is_empty() {
 					println!("대기 중인 주소가 없습니다. 주소를 먼저 추가해 주세요.");
 					continue;
 				}
-				let scope = ask_auto_batch_scope();
+				let Some(scope) = ask_auto_batch_scope() else { continue; };
 				println!("=== AUTO 모드: ON (일괄처리) ===");
 				println!("일괄처리 시작: {}건", pending_queue.len());
 				batch_running = true;
@@ -1297,7 +1281,7 @@ return JSON.stringify(out);
 					println!("대기 중인 주소가 없습니다. 주소를 먼저 추가해 주세요.");
 					continue;
 				}
-				let scope = ask_auto_batch_scope();
+				let Some(scope) = ask_auto_batch_scope() else { continue; };
 				println!("=== AUTO 모드: ON (일괄처리) ===");
 				println!("일괄처리 시작: {}건", pending_queue.len());
 				batch_running = true;
@@ -1316,7 +1300,7 @@ return JSON.stringify(out);
 					continue;
 				}
 				println!("AUTO 재개. 다음 주소 ({}건 남음)", pending_queue.len());
-				let scope = ask_auto_batch_scope();
+				let Some(scope) = ask_auto_batch_scope() else { continue; };
 				batch_running = true;
 				auto_mode = false;
 				run_auto_batch(&mut pending_queue, scope);
@@ -1345,8 +1329,8 @@ return JSON.stringify(out);
 					input
 				};
 				if auto_mode {
-					let mut queue = vec![address.clone()];
-					run_auto_batch(&mut queue, AutoBatchScope::Full);
+					pending_queue.push(address.clone());
+					run_auto_batch(&mut pending_queue, AutoBatchScope::Full);
 					kras_quick::task_screen::set_task_auto_mode(true);
 				} else {
 					run_one(&address, &mut previous_address);

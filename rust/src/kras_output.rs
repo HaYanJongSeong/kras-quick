@@ -569,7 +569,15 @@ pub fn is_kras_stage3_output_complete(
 	};
 	let label = output_label(&target);
 	let structure_path = with_building_suffix(&paths.structure_json, &paths.other_directory, &label);
-	verify_kras_output(paths, &structure_path, &target) || {
+	if verify_kras_output(paths, &structure_path, &target) { return true; }
+	let has_current_record = crate::output_log::entries(&structure_path, "output").iter().any(|record| {
+		let integrity = &record["_krasIntegrity"];
+		integrity["building"] == json!({"value":target.building.value, "label":target.building.label})
+			&& integrity["floorRoom"] == target.floor_room.as_ref()
+				.map(|floor| json!({"value":floor.value, "label":floor.label})).unwrap_or(Value::Null)
+	});
+	if has_current_record { return false; }
+	{
 		let legacy = format!("{}\\oz-structure.json", paths.other_directory);
 		let legacy = with_building_suffix(&legacy, &paths.other_directory, &label);
 		verify_kras_output(paths, &legacy, &target)
