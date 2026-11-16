@@ -1,18 +1,12 @@
 {
   "name": "kras-quick",
-  "version": "2.1.2",
-  "description": "KRAS Quick Windows launcher",
-  "type": "module",
-  "bin": { "kras-quick": "bin/kras-quick.js" },
-  "engines": { "node": ">=18" },
-  "files": ["bin/kras-quick.js", "README.md", "LICENSE"],
-  "license": "MIT",
+  "version": "3.0.0",
+  "description": "KRAS Quick Windows launcher with Rust runtime",
   "repository": { "type": "git", "url": "https://github.com/HaYanJongSeong/kras-quick.git" },
-  "scripts": {
-    "test": "node --test tests/launcher.test.js",
-    "typecheck": "npm --prefix source run typecheck",
-    "test:kras": "npm --prefix source run test:kras",
-    "test:property": "npm --prefix source run test:property",
-    "test:all": "npm test && npm --prefix source run test:all"
-  }
+  "license": "MIT",
+  "os": ["win32"],
+  "cpu": ["x64"],
+  "bin": { "kras-quick": "bin/kras-quick.cjs" },
+  "files": ["bin/kras-quick.cjs", "bin/kras-quick.exe", "assets/kras-quick.png", "kras-quick.ico"],
+  "engines": { "node": ">=18" }
 }

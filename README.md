@@ -1,105 +1,48 @@
-# KRAS Quick v2.1.2
+<p align="center"><img src="https://raw.githubusercontent.com/HaYanJongSeong/kras-quick/main/assets/kras-quick.png" width="128" height="128" alt="KRAS Quick"></p>
 
-KRAS/OZ 토지·건축물 조회 자동화 도구입니다.
+# KRAS Quick
 
-GitHub 릴리스와 npm 패키지 `kras-quick`의 공개 버전은 2.1.2입니다.
+Windows용 부동산종합증명서 조회·저장 도구입니다. 버전 3.0.0부터 Rust 런타임을 사용합니다.
 
-## GitHub 설치
-
-PowerShell에 아래 명령을 붙여 넣으면 설치가 시작됩니다. `git`, `gh`, Node.js는 따로 설치하지 않아도 됩니다.
-
-```powershell
-irm https://raw.githubusercontent.com/HaYanJongSeong/kras-quick/main/install.ps1 | iex
-```
-
-설치 스크립트는 GitHub Release `v2.1.2`에서 EXE와 runtime ZIP을 받습니다. 각 파일의 SHA-256을 확인한 뒤 `Downloads\kras-quick.exe`를 설치하고 실행합니다.
-
-## 수동 설치
-
-[v2.1.2 Release](https://github.com/HaYanJongSeong/kras-quick/releases/tag/v2.1.2)에서 다음 파일을 같은 폴더에 다운로드합니다.
+실사이트 전체 기능 검증과 일부 복구 작업은 완료되지 않았습니다. 접속 차단·보안문자 반복 실패가 발생하면 실행을 중단하고 서비스 운영기관의 안내를 따르세요.
 
 ```text
-kras-quick.exe
-kras-quick-runtime-v2.1.2.zip
-```
-
-두 파일을 받은 뒤 `kras-quick.exe`를 실행하세요.
-
-## npm으로 설치
-
-공개 npm 패키지 이름은 `kras-quick`이며 `latest`는 2.1.2입니다. npm·npx는 Node.js 18 이상이 필요합니다.
-
-```powershell
-npm install -g kras-quick@2.1.2
-kras-quick
-```
-
-설치 없이 실행하려면 다음 명령을 사용하세요.
-
-```powershell
 npx kras-quick
 ```
 
-다운로드 폴더에 로컬 테스트 패키지와 해당 버전의 EXE·runtime ZIP을 준비한 경우에는 공개 registry 대신 로컬 패키지를 실행할 수 있습니다.
+Windows x64와 Node.js 18 이상이 필요합니다. Node.js 없이 사용하려면 [3.0.0 릴리스](https://github.com/HaYanJongSeong/kras-quick/releases/tag/v3.0.0)의 EXE를 사용하세요. 최초 실행 시 OCR 모델 런타임을 GitHub에서 준비합니다.
 
-```powershell
-npx --offline --yes --package="$env:USERPROFILE\Downloads\kras-quick-test" kras-quick
+변경 사항과 검증 제한은 [릴리스 노트](RELEASE_NOTES_v3.0.0.md)에 있습니다. 이전 버전 설치 스크립트는 3.0.0용으로 검증되지 않았습니다.
+
+## 산출물
+
+직접 실행하면 EXE 폴더, npx로 실행하면 명령을 실행한 폴더에 저장합니다.
+
+```text
+KRAS/지번/
+├─ 지번-건물명.pdf
+└─ 기타/
+   ├─ 지번-건물명.xml
+   ├─ 지번-건물명.json
+   └─ 작업로그.jsonl
 ```
 
-## 요구 사항
+토지는 건물명 없이, 층호 문서는 층호까지 파일명에 표기합니다. 정상 산출물이 확인되면 중복 출력은 건너뜁니다.
 
-- Windows 10 이상
-- 설치된 Chrome, Edge, Brave, Vivaldi, Opera 또는 Whale. Firefox는 시험 지원입니다.
-- 인터넷 연결(최초 runtime 다운로드 또는 KRAS 조회)
+XML은 OZ 원문입니다. 같은 이름의 JSON은 `document`에 전체 태그·속성·계층·반복 항목·빈 값·문자열을 보존하고, `summary`에 주요 항목을 따로 둡니다. 단계·오류·무결성 기록은 `작업로그.jsonl` 하나에 누적합니다. PDF에 사용한 PNG는 별도로 저장하지 않습니다.
 
-프로그램에서 사용할 브라우저를 선택합니다. Chromium 계열은 업무용 별도 프로필과 CDP 연결을 사용합니다. Firefox는 한국어로 실행되며, 프로그램 종료 시 Quick이 연 Firefox 창도 닫힙니다. 기존 개인 프로필은 사용하지 않습니다.
+## 아이콘
 
-## 2.1.2 변경 사항
-
-- AUTO 보안문자 재시도 번호를 OCR 옵션으로 올바르게 전달해 1·2·3차 판독 설정을 구분합니다. 실패한 후보는 다시 제출하지 않으며 다른 유효 후보를 얻지 못하면 수동 입력으로 전환합니다.
-- 주소 조회 중 페이지 이동으로 실행 문맥이 사라지면 문서 로딩을 기다려 같은 조회를 최대 3회 시도합니다. 보안문자 제출이나 결과 저장을 통째로 재실행하지 않습니다.
-- AUTO 종료 시 처리 실패 주소·원본 입력 PNU·오류 사유를 별도로 안내합니다. 재처리에 성공한 주소는 실패 목록에서 제거합니다. 목록은 현재 실행의 메모리에 보관하며 별도 파일 저장이나 강제 종료 후 복구는 제공하지 않습니다.
-- runtime ZIP을 .NET의 2인자 압축 해제 호출로 풀어 Windows PowerShell의 `Expand-Archive` 호환 오류를 피합니다.
-
-## 2.1.1 변경 사항
-
-- Zod와 취약한 전이 의존성을 보완하고 미사용 `playwright` 의존성을 제거했습니다. 포터블본도 검증한 lockfile로 설치합니다.
-- 재개 시 PDF·전체 PNG·XML의 크기·SHA-256, 기본 파일 형식과 구조 JSON을 검사합니다. 반복 검사에서는 파일 메타데이터가 바뀐 경우에만 다시 해시합니다.
-- 무결성 정보가 없는 기존 결과나 부분 저장 파일을 자동으로 덮어쓰지 않습니다. 충돌 시 AUTO를 중단하며 수동 판단이 필요합니다. 전체 PDF 파싱·PNG 디코딩·엄격한 XML 문법 검증이나 자동 마이그레이션은 제공하지 않습니다.
-- 완료된 집합건물 총괄은 층별 처리 목록을 확보하되 다시 저장하지 않습니다.
-- 브라우저 테스트의 닫힘 이벤트와 닫기 작업을 함께 기다려 처리되지 않은 Promise 거부를 방지합니다. Windows 짧은 임시 경로와 긴 경로를 같은 테스트 위치로 취급하도록 fixture를 보완했습니다.
-
-## 2.1.0 변경 사항
-
-- 단일 필지 AUTO에서도 대규모 모드와 같은 처리 범위를 선택합니다: 토지만, 토지+일반건물, 토지+일반건물+집합건물. Enter 기본값은 전체입니다.
-- Firefox OZ 도구 모음의 한국어·영어 페이지 이동 선택자를 지원합니다.
-- 현재 작업에 연결된 OZ 보고서를 캡처하도록 포터블본을 최신 소스와 맞췄습니다.
-- 한글 경로의 Windows 프로세스 식별 시 PowerShell 출력 인코딩을 UTF-8로 지정합니다.
-
-자동검사와 실행기 시작·취소를 검증했습니다. 2.1.0의 실제 로그인·필지 조회·CAPTCHA 처리와 브라우저별 전체 AUTO는 이번 릴리스 검증에서 실행하지 않았습니다.
+앱·문서·패키지는 남색 바탕의 흰 종이비행기와 파란 `+` 아이콘으로 통일합니다.
+일사편리 파비콘을 참고한 별도 도구용 아이콘이며, 정부 공식 앱을 뜻하지 않습니다.
 
 ## 개발
 
-```powershell
-npm ci --prefix source
-npm run test:property
-npm run test:kras
-npm run typecheck
-```
-
-기능 테스트와 타입 검사는 `source/`의 개발 의존성을 사용합니다.
-
-직접 빌드할 때는 `C:\Program Files\Tesseract-OCR`에 Tesseract를 설치하고 아래 명령을 실행하세요.
+Rust 소스는 `rust/`에 있습니다. Windows SDK의 리소스 컴파일러가 필요합니다.
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\build-portable.ps1
-powershell -NoProfile -ExecutionPolicy Bypass -File .\build-single-exe.ps1
+cargo test --manifest-path rust/Cargo.toml --locked
+cargo build --manifest-path rust/Cargo.toml --release --locked
 ```
 
-## 검증
-
-수정본의 검증 결과와 아직 확인하지 못한 항목은 [VERIFICATION.md](VERIFICATION.md)에 기록했습니다.
-
-## 라이선스
-
-[MIT](LICENSE)
+실사이트 테스트는 기본 실행에서 제외합니다. [MIT 라이선스](LICENSE)를 따릅니다.
