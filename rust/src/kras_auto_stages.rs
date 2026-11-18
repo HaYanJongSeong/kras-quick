@@ -106,6 +106,9 @@ pub trait KrasOzViewerSurface {
 	fn has_visible_captcha(&self) -> bool;
 	fn capture_pdf(&self) -> Result<Vec<u8>, Box<dyn std::error::Error>>;
 	fn capture_page_pngs(&self) -> Result<Vec<Vec<u8>>, Box<dyn std::error::Error>>;
+	fn take_captured_page_pngs(&self) -> Result<Vec<Vec<u8>>, Box<dyn std::error::Error>> {
+		self.capture_page_pngs()
+	}
 	fn read_report_xml(&self) -> Result<String, Box<dyn std::error::Error>>;
 }
 
@@ -188,7 +191,7 @@ pub fn run_kras_auto_stage3<S: KrasOzViewerSurface>(
 		let pdf = surface.capture_pdf()?;
 		crate::task_screen::task_status("Stage 3: PDF 캡처 완료\n");
 		crate::task_screen::task_status("Stage 3: PNG 캡처 중...\n");
-		let page_pngs = surface.capture_page_pngs()?;
+		let page_pngs = surface.take_captured_page_pngs()?;
 		crate::task_screen::task_status("Stage 3: PNG 캡처 완료\n");
 		crate::task_screen::task_status("Stage 3: XML 읽기 중...\n");
 		let page_xml = surface.read_report_xml()?;
@@ -197,7 +200,7 @@ pub fn run_kras_auto_stage3<S: KrasOzViewerSurface>(
 		let capture = KrasOzCapture {
 			pdf,
 			page_pngs,
-			page_xml: page_xml.clone(),
+			page_xml,
 		};
 		let xml_data = parse_kras_xml(&capture.page_xml);
 		if !valid_capture(&capture) || !same_parcel_address(&xml_data.land_loc_nm, &stage2.address) {
@@ -209,6 +212,7 @@ pub fn run_kras_auto_stage3<S: KrasOzViewerSurface>(
 				reason: "document_mismatch".to_string(),
 			}
 		} else {
+			drop(capture.page_pngs);
 			// saveKrasOutput equivalent: write files
 			let label = output_label(&KrasOutputTarget {
 				building: stage2.building.clone(),
@@ -240,12 +244,7 @@ pub fn run_kras_auto_stage3<S: KrasOzViewerSurface>(
 				let a = describe_artifact(&structure_path, path, bytes);
 				serde_json::json!({ "file": a.file, "bytes": a.bytes, "sha256": a.sha256 })
 			};
-			let page_png_artifacts: Vec<serde_json::Value> = capture
-				.page_pngs
-				.iter()
-				.zip(png_paths.iter())
-				.map(|(bytes, path)| artifact(path, bytes))
-				.collect();
+			let page_png_artifacts: Vec<serde_json::Value> = Vec::new();
 			let mut integrity = serde_json::json!({
 				"version": 3,
 				"building": { "value": stage2.building.value, "label": stage2.building.label },

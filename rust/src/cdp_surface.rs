@@ -16,7 +16,17 @@ pub struct CdpSurface {
 	page_cache: std::sync::Mutex<Option<Vec<Vec<u8>>>>,
 }
 
+#[cfg(test)]
+#[path = "capture_memory_tests.rs"]
+mod capture_memory_tests;
+
 impl CdpSurface {
+	fn capture_pages(&self) -> Result<Vec<Vec<u8>>, Box<dyn std::error::Error>> {
+		crate::oz_capture::capture_oz_pages(self, |done, total| {
+			crate::task_screen::task_status(&format!("Stage 3: PNG 캡처 {done}/{total}페이지 완료\n"));
+		})
+	}
+
 	pub fn close_viewer(&self) -> Result<(), Box<dyn std::error::Error>> {
 		if !crate::kras_auto_stages::is_viewer_url(&self.page_url) {
 			return Err("OZ 뷰어가 아닌 탭은 닫지 않습니다.".into());
@@ -117,9 +127,9 @@ pub fn send_cdp(&self, method: &str, params: Value) -> Result<Value, Box<dyn std
 					if let Some(err) = v.get("error") {
 						return Err(format!("CDP error: {err}").into());
 					}
-					// JS 예외는 error 필드가 아니라 exceptionDetails로 온다.
-					// 이때 result는 {}라서 사유가 통째로 사라지므로 명시적으로 노출한다.
-					if let Some(details) = v.get("exceptionDetails") {
+					// Runtime.evaluate의 예외는 명령 응답 result 안에 들어온다.
+					if let Some(details) = v.get("result").and_then(|result| result.get("exceptionDetails"))
+						.or_else(|| v.get("exceptionDetails")) {
 						let desc = details
 							.get("exception")
 							.and_then(|e| {
@@ -161,14 +171,12 @@ impl KrasOzViewerSurface for CdpSurface {
 	/// TS captureOnce — OZ 뷰어 캡처(줌 300% → 1페이지 복귀 → 페이지 넘김 → 안정 캔버스).
 	/// 결과를 캐시해 PDF/PNG 두 경로가 같은 캡처를 공유한다.
 	fn capture_page_pngs(&self) -> Result<Vec<Vec<u8>>, Box<dyn std::error::Error>> {
-		if let Ok(mut cache) = self.page_cache.lock() {
+		if let Ok(cache) = self.page_cache.lock() {
 			if let Some(pages) = cache.as_ref() {
 				return Ok(pages.clone());
 			}
 		}
-		let pages = crate::oz_capture::capture_oz_pages(self, |done, total| {
-			crate::task_screen::task_status(&format!("Stage 3: PNG 캡처 {done}/{total}페이지 완료\n"));
-		})?;
+		let pages = self.capture_pages()?;
 		if let Ok(mut cache) = self.page_cache.lock() {
 			*cache = Some(pages.clone());
 		}
@@ -177,8 +185,18 @@ impl KrasOzViewerSurface for CdpSurface {
 
 	/// TS buildPdfFromPngs — 캡처한 PNG로 PDF를 만든다(뷰어 화면과 동일한 출력).
 	fn capture_pdf(&self) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-		let pages = self.capture_page_pngs()?;
-		crate::oz_capture::build_pdf_from_pngs(&pages)
+		let mut cache = self.page_cache.lock().map_err(|error| std::io::Error::other(error.to_string()))?;
+		if cache.is_none() { *cache = Some(self.capture_pages()?); }
+		let pages = cache.as_deref().ok_or("캡처한 페이지가 없습니다.")?;
+		crate::oz_capture::build_pdf_from_pngs(pages)
+	}
+
+	fn take_captured_page_pngs(&self) -> Result<Vec<Vec<u8>>, Box<dyn std::error::Error>> {
+		let pages = self.page_cache.lock().map_err(|error| std::io::Error::other(error.to_string()))?.take();
+		match pages {
+			Some(pages) => Ok(pages),
+			None => self.capture_pages(),
+		}
 	}
 
 	/// TS readReportXml — 전역변수 → 신형 strOZDataXML → 구형 ozdata= → DOM 순.

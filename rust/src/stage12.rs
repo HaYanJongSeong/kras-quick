@@ -174,6 +174,7 @@ fn auto_captcha_attempts(
 		crate::task_screen::task_status(&format!("AUTO 보안문자 제출 ({attempt}/5)\n"));
 		match submit(&candidate).as_str() {
 			"success" => return Ok(None),
+			"site_error" => return Err(crate::batch_recovery::SiteRequestFailure.into()),
 			"access_blocked" => return Err("접속 차단 안내가 감지되어 처리를 중단했습니다.".into()),
 			"login_expired" => return Err("로그인이 만료되었습니다.".into()),
 			"need_lookup" => return Err("건물 재조회가 필요합니다.".into()),
@@ -225,6 +226,7 @@ fn manual_captcha_entries(
 		}
 		match submit(candidate).as_str() {
 			"success" => return Ok(()),
+			"site_error" => return Err(crate::batch_recovery::SiteRequestFailure.into()),
 			"access_blocked" => return Err("접속 차단 안내가 감지되어 처리를 중단했습니다.".into()),
 			"login_expired" => return Err("로그인이 만료되었습니다.".into()),
 			"need_lookup" => return Err("건물 재조회가 필요합니다.".into()),
@@ -236,6 +238,28 @@ fn manual_captcha_entries(
 #[cfg(test)]
 mod captcha_submission_tests {
 	use super::{auto_captcha_attempts, manual_captcha_entries, reserve_captcha_candidate};
+
+	#[test]
+	fn site_error_does_not_retry_or_enter_manual_fallback() {
+		let mut submissions = 0;
+		let error = auto_captcha_attempts(|_| Some("01234".into()), |_| {
+			submissions += 1;
+			"site_error".into()
+		}).unwrap_err();
+		assert!(error.is::<crate::batch_recovery::SiteRequestFailure>());
+		assert_eq!(submissions, 1);
+	}
+
+	#[test]
+	fn manual_site_error_does_not_prompt_again() {
+		let mut reads = 0;
+		let error = manual_captcha_entries(Vec::new(), || {
+			reads += 1;
+			assert_eq!(reads, 1);
+			Ok(Some("01234".into()))
+		}, |_| "site_error".into()).unwrap_err();
+		assert!(error.is::<crate::batch_recovery::SiteRequestFailure>());
+	}
 
 	#[test]
 	fn access_block_stops_after_one_submission_without_fallback() {
@@ -531,6 +555,8 @@ const FILL_CAPTCHA_JS: &str = r##"async (captchaText) => {
 	const isLoginUrl = () => { try { return /\/login(?:\/|$)/i.test(new URL(location.href).pathname); } catch { return false; } };
 	const classify = (text) => {
 		if (/(접속|접근|이용).{0,15}(차단|제한)|IP.{0,20}(차단|제한)|비정상.{0,10}접근/i.test(text)) return "access_blocked";
+		const compact = text.replace(/\s+/g, "");
+		if (compact.includes("오류가발생하였습니다.") && compact.includes("잠시후다시시도")) return "site_error";
 		if (text.includes("도면정보") || text.includes("도호가 불일치") || text.includes("출력축척")) return "confirm";
 		if (text.includes("신청물건을 먼저 조회")) return "need_lookup";
 		if (text.includes("로그인이 만료되었습니다")) return "login_expired";
@@ -539,7 +565,8 @@ const FILL_CAPTCHA_JS: &str = r##"async (captchaText) => {
 	};
 	if (isLoginUrl()) return "login_expired";
 	const existingDialog = document.querySelector('.swal2-container.swal2-backdrop-show');
-	if (existingDialog !== null && classify(existingDialog.textContent ?? "") === "access_blocked") return "access_blocked";
+	const existingKind = existingDialog === null ? null : classify(existingDialog.textContent ?? "");
+	if (["access_blocked", "site_error", "login_expired"].includes(existingKind)) return existingKind;
 	const captcha = document.querySelectorAll("#captcha");
 	const viewButton = document.querySelectorAll("button[onclick='certView.fnProcessCert();']");
 	if (captcha.length !== 1 || viewButton.length !== 1) return "error";
@@ -554,6 +581,7 @@ const FILL_CAPTCHA_JS: &str = r##"async (captchaText) => {
 		const dialog = el === null ? null : (el.textContent ?? "").replace(/\s+/g, " ").trim();
 		const kind = dialog === null ? null : classify(dialog);
 		if (kind === "access_blocked") return "access_blocked";
+		if (kind === "site_error") return "site_error";
 		if (kind === null) { await new Promise((r) => setTimeout(r, 250)); continue; }
 		if (kind === "need_lookup") {
 			document.querySelector('.swal2-container.swal2-backdrop-show .swal2-confirm')?.click();

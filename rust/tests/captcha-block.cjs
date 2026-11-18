@@ -17,5 +17,17 @@ const script = source.match(/const FILL_CAPTCHA_JS: &str = r##"([\s\S]*?)"##;/)[
     });
     assert.equal(await select('01234'), 'access_blocked');
   }
+  for (const text of ['오류가 발생하였습니다. 잠시 후 다시 시도하여 주시기 바랍니다.', '오류가\n발생하였습니다. 잠시 후 다시 시도해 주세요.']) {
+    const select = vm.runInNewContext(`(${script})`, {
+      location: { href: 'https://www.kras.go.kr/kras/cert/certView.do' }, URL,
+      document: {
+        querySelector: () => ({ textContent: text }),
+        querySelectorAll: () => { throw new Error('site error must not resubmit captcha'); },
+      },
+      setTimeout: () => { throw new Error('site error must not retry captcha'); },
+    });
+    assert.equal(await select('01234'), 'site_error');
+  }
   console.log('PASS: 3 access-block notices cause zero captcha submissions and zero retries');
+  console.log('PASS: 2 site-error notices cause zero captcha resubmissions and zero retries');
 })().catch(error => { console.error(error); process.exitCode = 1; });

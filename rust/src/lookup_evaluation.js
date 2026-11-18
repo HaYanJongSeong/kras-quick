@@ -338,6 +338,16 @@
 			}
 		};
 		let timeoutId                    ;
+		let noticeTimer;
+		const noticeFailure = new Promise((_resolve, reject) => {
+			noticeTimer = window.setInterval(() => {
+				const dialog = document.querySelector('.swal2-container.swal2-backdrop-show');
+				const text = (dialog?.textContent ?? '').replace(/\s+/g, '');
+				if (/오류가발생하였습니다|차단|접속제한|접근제한|로그인.{0,8}만료/.test(text)) {
+					reject(new KrasEvaluationError('조회 오류 안내 감지'));
+				}
+			}, 200);
+		});
 		const timeout = new Promise       ((_resolve, reject) => {
 			timeoutId = window.setTimeout(
 				() => reject(new KrasEvaluationError("조회 완료 시간 초과")),
@@ -346,11 +356,12 @@
 		});
 		try {
 			button.click();
-			await Promise.race([completion, timeout]);
+			await Promise.race([completion, timeout, noticeFailure]);
 		} finally {
 			certView.fnCheckLedger = originalCheckLedger;
 			certView.fnEmptyRequestInfo = originalEmptyRequest;
 			if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+			if (noticeTimer !== undefined) window.clearInterval(noticeTimer);
 		}
 
 		const readBuildingOptions = ()                       => {

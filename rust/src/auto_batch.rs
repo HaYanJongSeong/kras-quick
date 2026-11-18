@@ -12,9 +12,6 @@ use crate::quick_address::AutoBatchScope;
 /// TS AUTO_PACING_MS — 대상 1건 완료 후 대기.
 pub const AUTO_PACING_MS: u64 = 1800;
 
-/// TS AUTO_MAX_RETRIES — 대상당 최대 시도 횟수.
-pub const AUTO_MAX_RETRIES: u32 = 3;
-
 /// TS AUTO_ORANGE — AUTO 모드 출력 색(256색 208).
 pub const AUTO_ORANGE: &str = "\x1b[38;5;208m";
 
@@ -36,6 +33,15 @@ pub enum AutoTarget {
 	Building { building: AutoBuilding },
 	AggregateTotal { building: AutoBuilding },
 	AggregateFloor { building: AutoBuilding, floor: AutoBuilding },
+}
+
+pub fn scope_includes_target(scope: AutoBatchScope, target: &AutoTarget) -> bool {
+	match target {
+		AutoTarget::Land => scope.includes_land(),
+		AutoTarget::Building { .. } => scope.includes_buildings(),
+		AutoTarget::AggregateTotal { .. } => false,
+		AutoTarget::AggregateFloor { .. } => scope.includes_floors(),
+	}
 }
 
 /// 건물 옵션 + 원본 index(TS KrasBuildingOption.index).
@@ -72,7 +78,7 @@ pub fn auto_target_label(target: &AutoTarget) -> String {
 	match target {
 		AutoTarget::Land => "토지".to_string(),
 		AutoTarget::Building { building } => building.label.clone(),
-		AutoTarget::AggregateTotal { building } => format!("{} 총괄", building.label),
+		AutoTarget::AggregateTotal { building } => format!("{} 층호 목록", building.label),
 		AutoTarget::AggregateFloor { building, floor } => {
 			format!("{} {}", building.label, floor.label)
 		}
@@ -145,15 +151,15 @@ pub fn pick_next_auto_target(
 		return if land_complete { None } else { Some(AutoTarget::Land) };
 	}
 	if !stage1.is_completed() || stage1.building_options.is_empty() {
-		return if land_complete { None } else { Some(AutoTarget::Land) };
+		return if scope.includes_land() && !land_complete { Some(AutoTarget::Land) } else { None };
 	}
-	if !land_complete {
+	if scope.includes_land() && !land_complete {
 		return Some(AutoTarget::Land);
 	}
 
 	for building in &stage1.building_options {
 		if building.is_aggregate() {
-			if scope == AutoBatchScope::OrdinaryOnly {
+			if !scope.includes_floors() {
 				continue;
 			}
 			match floor_queues.get(&building.value) {
@@ -170,7 +176,7 @@ pub fn pick_next_auto_target(
 			continue;
 		}
 		let option = building.to_output_option();
-		if !is_kras_stage3_output_complete(&output, &option, None) {
+		if scope.includes_buildings() && !is_kras_stage3_output_complete(&output, &option, None) {
 			return Some(AutoTarget::Building { building: building.clone() });
 		}
 	}
@@ -188,10 +194,7 @@ pub fn is_auto_target_new(paths: &KrasAutoStagePaths, target: &AutoTarget) -> bo
 		AutoTarget::Building { building } => {
 			!is_kras_stage3_output_complete(&output, &building.to_output_option(), None)
 		}
-		AutoTarget::AggregateTotal { building } => {
-			// 이미 출력된 총괄은 층 큐 확보용 재캡처이므로 새 건으로 세지 않는다.
-			!is_kras_stage3_output_complete(&output, &building.to_output_option(), None)
-		}
+		AutoTarget::AggregateTotal { .. } => false,
 		AutoTarget::AggregateFloor { building, floor } => {
 			!is_kras_stage3_output_complete(
 				&output,
@@ -307,24 +310,6 @@ impl AutoBatchState {
 			.count();
 		(total.len(), processed)
 	}
-}
-
-/// TS runAutoTarget의 재시도 판정: attempt가 AUTO_MAX_RETRIES 이하면 재시도.
-pub fn should_retry(attempt: u32) -> bool {
-	attempt < AUTO_MAX_RETRIES
-}
-
-/// TS 로그인 만료 문구.
-pub const LOGIN_EXPIRED_MESSAGE: &str =
-	"AUTO: 로그인이 만료되었습니다. 브라우저에서 다시 로그인해 주세요.";
-
-/// TS 배치 실패 문구.
-pub fn batch_failed_message(target: &AutoTarget) -> String {
-	format!(
-		"AUTO: {}을(를) {}회 시도했지만 실패했습니다.",
-		auto_target_label(target),
-		AUTO_MAX_RETRIES
-	)
 }
 
 /// TS AutoAddressFailure (kras-auto-failures.ts) — 실패 주소 한 건의 원본 입력과 사유.
@@ -507,7 +492,6 @@ mod tests {
 	#[test]
 	fn constants_match_ts() {
 		assert_eq!(AUTO_PACING_MS, 1800);
-		assert_eq!(AUTO_MAX_RETRIES, 3);
 		assert_eq!(AUTO_ORANGE, "\x1b[38;5;208m");
 	}
 
@@ -518,7 +502,7 @@ mod tests {
 		assert_eq!(auto_target_label(&AutoTarget::Building { building: b.clone() }), "(일반)건물");
 		assert_eq!(
 			auto_target_label(&AutoTarget::AggregateTotal { building: b.clone() }),
-			"(일반)건물 총괄"
+			"(일반)건물 층호 목록"
 		);
 		let f = building(0, "3층 301호");
 		assert_eq!(
@@ -574,7 +558,7 @@ mod tests {
 	}
 
 	#[test]
-	fn pick_ordinary_only_skips_aggregate_buildings() {
+	fn land_and_buildings_starts_with_land() {
 		let dir = std::env::temp_dir().join("kras-auto-ordinary");
 		let _ = std::fs::create_dir_all(&dir);
 		let paths = paths_in(&dir, "주소C");
@@ -584,7 +568,7 @@ mod tests {
 			building(2, "(일반)건물"),
 		]);
 		let t = pick_next_auto_target(&paths, Some(&stage1), &queues, AutoBatchScope::OrdinaryOnly);
-		// 토지가 미완료라 land가 먼저 나온다 — land-only와 달리 집합은 건너뛴다.
+		// 토지가 미완료라 land가 먼저 나온다.
 		assert_eq!(t, Some(AutoTarget::Land));
 	}
 
@@ -602,6 +586,45 @@ mod tests {
 			target,
 			Some(AutoTarget::Land) | Some(AutoTarget::AggregateTotal { .. })
 		));
+	}
+
+	#[test]
+	fn buildings_only_selects_building_without_land_output() {
+		let dir = std::env::temp_dir().join(format!("kras-building-scope-{}", std::process::id()));
+		let paths = paths_in(&dir, "address");
+		let ordinary = building(1, "(일반)건물");
+		let stage1 = stage1_ok(vec![building(2, "A동 (집합)"), ordinary.clone()]);
+		assert_eq!(pick_next_auto_target(&paths, Some(&stage1), &HashMap::new(), AutoBatchScope::BuildingsOnly),
+			Some(AutoTarget::Building { building: ordinary }));
+	}
+
+	#[test]
+	fn floors_only_discovers_aggregate_then_selects_floor_without_parent_outputs() {
+		let dir = std::env::temp_dir().join(format!("kras-floor-scope-{}", std::process::id()));
+		let paths = paths_in(&dir, "address");
+		let aggregate = building(2, "A동 (집합)");
+		let floor = building(10, "101호");
+		let stage1 = stage1_ok(vec![building(1, "(일반)건물"), aggregate.clone()]);
+		let mut state = AutoBatchState::new();
+		state.mark_completed(&AutoTarget::Land, Some(stage1), false);
+		assert_eq!(state.next_target(&paths, AutoBatchScope::FloorsOnly), Some(AutoTarget::AggregateTotal { building: aggregate.clone() }));
+		state.set_floor_queue(&aggregate, vec![floor.clone()]);
+		assert_eq!(state.next_target(&paths, AutoBatchScope::FloorsOnly), Some(AutoTarget::AggregateFloor { building: aggregate, floor }));
+		assert_eq!(state.newly_added(), 0);
+	}
+
+	#[test]
+	fn scope_output_matrix_excludes_unselected_documents() {
+		let aggregate = building(2, "A동 (집합)");
+		let targets = [AutoTarget::Land, AutoTarget::Building { building: building(1, "(일반)건물") },
+			AutoTarget::AggregateTotal { building: aggregate.clone() },
+			AutoTarget::AggregateFloor { building: aggregate, floor: building(10, "101호") }];
+		for (answer, expected) in [("1", [true, false, false, false]), ("2", [true, true, false, false]),
+			("3", [false, true, false, false]), ("4", [false, false, false, true]),
+			("5", [true, true, false, true]), ("", [true, true, false, true])] {
+			let scope = crate::quick_address::parse_auto_batch_scope_answer(answer).unwrap();
+			assert_eq!(targets.each_ref().map(|target| scope_includes_target(scope, target)), expected);
+		}
 	}
 
 	#[test]
@@ -677,20 +700,6 @@ mod tests {
 		state.on_login_expired();
 		assert!(state.floor_queues.is_empty());
 		assert!(!state.reuse_loaded_options());
-	}
-
-	#[test]
-	fn retry_rule_matches_ts_max() {
-		assert!(should_retry(1));
-		assert!(should_retry(2));
-		assert!(!should_retry(3));
-	}
-
-	#[test]
-	fn batch_failed_message_contains_target_and_retry_limit() {
-		let msg = batch_failed_message(&AutoTarget::Land);
-		// TS는 `${label}을(를)`로 연결하므로 조사가 그대로 붙는다.
-		assert_eq!(msg, "AUTO: 토지을(를) 3회 시도했지만 실패했습니다.");
 	}
 
 	#[test]

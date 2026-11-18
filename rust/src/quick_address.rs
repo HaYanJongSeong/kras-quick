@@ -20,7 +20,7 @@ pub const LOGIN_PROMPT: &str = "선택한 브라우저의 KRAS 페이지에서 �
 
 /// 일괄처리 범위 선택 프롬프트.
 pub const AUTO_SCOPE_PROMPT: &str =
-	"일괄처리 범위를 선택하세요. (1: 토지만 / 2: 토지+일반건물 / 3: 토지+일반건물+집합건물 / Enter: 3)\n입력 > ";
+	"일괄처리 범위를 선택하세요. (1: 토지만 / 2: 토지+건물 / 3: 건물만 / 4: 층호만 / 5: 전부 / Enter: 전부)\n입력 > ";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum QuickAddressInput {
@@ -38,6 +38,8 @@ pub enum QuickAddressInput {
 pub enum AutoBatchScope {
 	LandOnly,
 	OrdinaryOnly,
+	BuildingsOnly,
+	FloorsOnly,
 	Full,
 }
 
@@ -46,8 +48,22 @@ impl AutoBatchScope {
 		match self {
 			AutoBatchScope::LandOnly => "land-only",
 			AutoBatchScope::OrdinaryOnly => "ordinary-only",
+			AutoBatchScope::BuildingsOnly => "buildings-only",
+			AutoBatchScope::FloorsOnly => "floors-only",
 			AutoBatchScope::Full => "full",
 		}
+	}
+
+	pub fn includes_land(self) -> bool {
+		matches!(self, Self::LandOnly | Self::OrdinaryOnly | Self::Full)
+	}
+
+	pub fn includes_floors(self) -> bool {
+		matches!(self, Self::FloorsOnly | Self::Full)
+	}
+
+	pub fn includes_buildings(self) -> bool {
+		matches!(self, Self::OrdinaryOnly | Self::BuildingsOnly | Self::Full)
 	}
 }
 
@@ -80,13 +96,15 @@ pub fn split_quick_address_batch(input: &str) -> Vec<String> {
 		.collect()
 }
 
-/// TS parseAutoBatchScopeAnswer — 1/2/3(또는 Enter=3)만 허용, 그 외 None.
+/// 처리 범위 1~5. Enter는 전부.
 pub fn parse_auto_batch_scope_answer(answer: &str) -> Option<AutoBatchScope> {
 	let normalized = answer.trim();
 	match normalized {
 		"1" => Some(AutoBatchScope::LandOnly),
 		"2" => Some(AutoBatchScope::OrdinaryOnly),
-		"" | "3" => Some(AutoBatchScope::Full),
+		"3" => Some(AutoBatchScope::BuildingsOnly),
+		"4" => Some(AutoBatchScope::FloorsOnly),
+		"" | "5" => Some(AutoBatchScope::Full),
 		_ => None,
 	}
 }
@@ -208,6 +226,19 @@ impl<R: std::io::Read> BufferedLineReader<R> {
 	/// 다음 줄을 읽는다(개행 제외). EOF면 남은 내용을 돌려준다.
 	pub fn read_line(&mut self) -> String {
 		self.try_read_line().unwrap_or_default()
+	}
+
+	pub fn try_read_menu_input(&mut self) -> std::io::Result<String> {
+		let input = self.try_read_line()?.trim().to_string();
+		if !matches!(classify_menu_input(&input), MenuAction::Run { .. }) { return Ok(input); }
+		let mut pending = Vec::new();
+		while let Some(end) = self.pending.iter().position(|byte| *byte == b'\n') {
+			let line = String::from_utf8_lossy(&self.pending[..end]).trim().to_string();
+			if !line.is_empty() && !matches!(classify_menu_input(&line), MenuAction::Run { .. }) { break; }
+			self.pending.drain(..=end);
+			if !line.is_empty() { pending.push(line); }
+		}
+		Ok(join_pending_lines(&input, &pending))
 	}
 
 	pub fn try_read_line(&mut self) -> std::io::Result<String> {
@@ -376,13 +407,15 @@ mod tests {
 	}
 
 	#[test]
-	fn scope_answer_accepts_only_1_2_3_and_empty() {
+	fn scope_answer_accepts_1_through_5_and_empty() {
 		assert_eq!(parse_auto_batch_scope_answer("1"), Some(AutoBatchScope::LandOnly));
 		assert_eq!(parse_auto_batch_scope_answer("2"), Some(AutoBatchScope::OrdinaryOnly));
-		assert_eq!(parse_auto_batch_scope_answer("3"), Some(AutoBatchScope::Full));
+		assert_eq!(parse_auto_batch_scope_answer("3"), Some(AutoBatchScope::BuildingsOnly));
+		assert_eq!(parse_auto_batch_scope_answer("4"), Some(AutoBatchScope::FloorsOnly));
+		assert_eq!(parse_auto_batch_scope_answer("5"), Some(AutoBatchScope::Full));
 		assert_eq!(parse_auto_batch_scope_answer(""), Some(AutoBatchScope::Full));
 		assert_eq!(parse_auto_batch_scope_answer("  2  "), Some(AutoBatchScope::OrdinaryOnly));
-		assert_eq!(parse_auto_batch_scope_answer("4"), None);
+		assert_eq!(parse_auto_batch_scope_answer("6"), None);
 		assert_eq!(parse_auto_batch_scope_answer("x"), None);
 	}
 

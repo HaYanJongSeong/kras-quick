@@ -17,6 +17,9 @@ use crate::output;
 use crate::task_timing::TaskTiming;
 use crate::term_env;
 
+#[path = "task_log.rs"]
+mod task_log;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BatchCounts {
 	pub processed: u64,
@@ -162,7 +165,6 @@ fn civil_from_days(days: i64) -> (i64, i64, i64) {
 }
 
 struct TaskScreen {
-	root: PathBuf,
 	file: Option<File>,
 	address: String,
 	phase: String,
@@ -180,12 +182,9 @@ struct TaskScreen {
 
 impl TaskScreen {
 	fn new(root: &str) -> std::io::Result<Self> {
-		let directory = Path::new(root).join("기타");
-		fs::create_dir_all(root)?;
-		let path = directory.join("작업로그.jsonl");
+		let (path, file) = task_log::create(Path::new(root))?;
 		Ok(Self {
-			root: PathBuf::from(root),
-			file: None,
+			file: Some(file),
 			address: String::new(),
 			phase: "준비".to_string(),
 			counts: None,
@@ -264,15 +263,8 @@ impl TaskScreen {
 
 	fn begin(&mut self, address: &str) {
 		self.pause();
-		self.close_file();
 		self.address = address.to_string();
 		self.attempt += 1;
-		let component: String = address.chars().map(|c| {
-			if c.is_control() || matches!(c, '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|') { '_' } else { c }
-		}).collect();
-		let component = component.trim_end_matches(['.', ' ']);
-		let component = if component.is_empty() { "미확인주소" } else { component };
-		self.path = self.root.join(component).join("기타").join("작업로그.jsonl");
 		self.phase = "조회 준비".to_string();
 		self.captcha.clear();
 		self.finished = false;
@@ -315,6 +307,7 @@ impl TaskScreen {
 	}
 
 	fn finish(&mut self, auto_mode: bool) {
+		if !self.finished { self.finalize_log(); }
 		self.finished = true;
 		self.timing.finish();
 		self.active = true;
@@ -467,9 +460,20 @@ impl TaskScreen {
 
 	fn close(&mut self) {
 		self.pause();
-		self.close_file();
+		if !self.finished { self.finalize_log(); } else { self.close_file(); }
 		if !self.finished {
 			output::write(&format!("작업 로그: {}\n", self.path.display()));
+		}
+	}
+
+	fn finalize_log(&mut self) {
+		self.close_file();
+		let millis = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
+		let korean = iso_from_millis(millis + 9 * 60 * 60 * 1000);
+		let stamp = format!("{}_{}", korean[..10].replace('-', ""), korean[11..19].replace(':', ""));
+		match task_log::finalize(&self.path, &stamp) {
+			Ok(path) => self.path = path,
+			Err(error) => output::write_err(&format!("작업 로그 이름 확정 실패. 기존 로그를 보존합니다: {error}\n")),
 		}
 	}
 }
@@ -735,7 +739,8 @@ mod tests {
 		let detail = format!("Stage 3 실패: 기존 산출물 보존: C:/{}-existing.pdf", "long-path/".repeat(20));
 		update_task_phase(&detail);
 		close_task_screen();
-		let text = fs::read_to_string(path).unwrap();
+		assert!(!path.exists());
+		let text = fs::read_to_string(fs::read_dir(&root).unwrap().next().unwrap().unwrap().path()).unwrap();
 		let recorded = text.lines().any(|line| {
 			let value: serde_json::Value = serde_json::from_str(line).unwrap();
 			value["detail"].as_str() == Some(detail.as_str())
@@ -746,7 +751,7 @@ mod tests {
 	}
 
 	#[test]
-	fn address_logs_stay_in_each_parcel_directory() {
+	fn address_logs_share_one_root_log() {
 		let env = TestEnv::new(true);
 		let root = temp_root("parcel-logs");
 		open_task_screen(&root.display().to_string());
@@ -755,10 +760,12 @@ mod tests {
 		begin_task_address("서울특별시 노원구 월계동 392-19");
 		let second = lock_screen(&snapshot().0.unwrap()).path.clone();
 		close_task_screen();
-		assert!(first.starts_with(root.join("서울특별시 중구 예장동 7").join("기타")));
-		assert!(second.starts_with(root.join("서울특별시 노원구 월계동 392-19").join("기타")));
-		assert!(fs::read_to_string(&first).unwrap().contains("예장동 7"));
-		assert!(fs::read_to_string(&second).unwrap().contains("월계동 392-19"));
+		assert_eq!(first, second);
+		let entry = fs::read_dir(&root).unwrap().next().unwrap().unwrap();
+		let text = fs::read_to_string(entry.path()).unwrap();
+		assert!(text.contains("예장동 7"));
+		assert!(text.contains("월계동 392-19"));
+		assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
 		assert!(!root.join("작업기록").exists());
 		drop(env);
 		cleanup(&root);
@@ -848,7 +855,7 @@ mod tests {
 		assert!(rendered.contains("\u{1b}[s"));
 		assert!(suspended);
 
-		let directory = root.join("fixture-address").join("기타");
+		let directory = root.clone();
 		let names: Vec<_> = fs::read_dir(&directory)
 			.unwrap()
 			.map(|entry| entry.unwrap().file_name())
@@ -882,7 +889,7 @@ mod tests {
 		assert!(!second.contains("PDF capture started"));
 		assert!(second.contains('\u{1b}'), "제자리 갱신 제어 코드 필요");
 		close_task_screen();
-		let entry = fs::read_dir(root.join("fixture-address").join("기타")).unwrap().next().unwrap().unwrap();
+		let entry = fs::read_dir(&root).unwrap().next().unwrap().unwrap();
 		let log = fs::read_to_string(entry.path()).unwrap();
 		assert!(log.contains("PDF capture started"));
 		assert!(log.contains("PDF capture finished"));

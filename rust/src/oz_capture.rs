@@ -295,8 +295,7 @@ fn build_pdf_with_compression(pngs: &[Vec<u8>], compression: flate2::Compression
 	}
 	let mut pages: Vec<Page> = Vec::with_capacity(pngs.len());
 	for png in pngs {
-		let decoded = image::load_from_memory(png)?;
-		let rgb = decoded.to_rgb8();
+		let rgb = image::load_from_memory(png)?.into_rgb8();
 		let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), compression);
 		encoder.write_all(rgb.as_raw())?;
 		pages.push(Page {
@@ -332,7 +331,7 @@ fn build_pdf_with_compression(pngs: &[Vec<u8>], compression: flate2::Compression
 	);
 	push(&mut buf, &mut offsets, pages_body.as_bytes());
 
-	for (k, page) in pages.iter().enumerate() {
+	for (k, page) in pages.into_iter().enumerate() {
 		let page_id = 3 + k * 3;
 		let contents_id = page_id + 1;
 		let image_id = page_id + 2;

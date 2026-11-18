@@ -7,6 +7,8 @@ pub mod cdp_surface;
 pub mod kras_auto_stages;
 mod exclusive_output;
 pub mod batch_input;
+pub mod batch_recovery;
+pub mod batch_checkpoint;
 pub mod property_watcher_lifecycle;
 pub mod kras_launcher;
 pub mod kras_dark;

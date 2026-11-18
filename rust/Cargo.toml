@@ -1,6 +1,6 @@
 [package]
 name = "kras-quick"
-version = "3.0.1"
+version = "3.0.2"
 edition = "2021"
 
 [[bin]]
@@ -22,3 +22,8 @@ tungstenite = "0.30"
 ureq = "3"
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_IO", "Win32_System_Console", "Win32_System_Pipes", "Win32_Storage_FileSystem", "Win32_System_DataExchange", "Win32_System_Memory"] }
 zip = "2"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"

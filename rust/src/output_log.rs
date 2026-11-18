@@ -17,5 +17,32 @@ pub fn entries(path: &str, kind: &str) -> Vec<Value> {
 }
 
 pub fn latest(path: &str, kind: &str) -> Option<Value> {
-	entries(path, kind).pop()
+	let text = std::fs::read_to_string(path).ok()?;
+	text.lines().rev().find_map(|line| {
+		let mut entry: Value = serde_json::from_str(line).ok()?;
+		if entry["kind"].as_str() != Some(kind) { return None; }
+		entry.get_mut("data").map(Value::take)
+	})
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn reverse_lookup_matches_complete_scan_with_trailing_partial_records() {
+		let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+		let path = std::env::temp_dir().join(format!("kras-log-latest-{}-{stamp}.jsonl", std::process::id()));
+		std::fs::write(&path, concat!(
+			"{\"kind\":\"stage1\",\"data\":{\"code\":\"001\"}}\n",
+			"{\"kind\":\"stage1\",\"data\":{\"code\":\"002\"}}\n",
+			"{\"kind\":\"stage2\",\"data\":null}\n",
+			"{\"kind\":\"stage1\"}\n{\"kind\":")).unwrap();
+		let name = path.to_str().unwrap();
+		for kind in ["stage1", "stage2", "absent"] {
+			assert_eq!(latest(name, kind), entries(name, kind).pop());
+		}
+		assert_eq!(latest(name, "stage1").unwrap()["code"], "002");
+		std::fs::remove_file(path).unwrap();
+	}
 }
