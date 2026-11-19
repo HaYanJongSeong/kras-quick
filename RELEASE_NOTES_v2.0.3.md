@@ -2,7 +2,7 @@
 
 npm·npx 실행기가 찾던 EXE 파일명을 실제 GitHub Release 파일명과 맞췄습니다. BOM 없이 패키징하고 실행기와 runtime ZIP의 SHA-256을 새 빌드에 맞춰 갱신했습니다.
 
-AUTO 일시정지·재개에서 터미널 인자가 빠진 오류도 고쳤습니다. GitHub 소스를 내려받아 빌드할 때의 경로와 설치 스크립트의 runtime ZIP 이름을 정리했습니다.
+GitHub 소스를 내려받아 빌드할 때의 경로와 설치 스크립트의 runtime ZIP 이름을 정리했습니다.
 
 ## 설치
 

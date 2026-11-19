@@ -4,8 +4,8 @@ import { spawnSync } from "node:child_process"
 import { test } from "node:test"
 import { fileURLToPath } from "node:url"
 
-test("launcher is BOM-free and points to the current release asset", () => {
-  const file = new URL("../bin/kras-quick.js", import.meta.url)
+test("launcher is BOM-free and bundles the matching release executable", () => {
+  const file = new URL("../bin/kras-quick.cjs", import.meta.url)
   const bytes = readFileSync(file)
   assert.equal(bytes.subarray(0, 2).toString(), "#!")
   assert.equal(spawnSync(process.execPath, ["--check", fileURLToPath(file)]).status, 0)
@@ -15,8 +15,13 @@ test("launcher is BOM-free and points to the current release asset", () => {
   assert.equal(manifest.name, "kras-quick", "npx kras-quick must resolve the public package")
   assert.equal(lock.name, manifest.name)
   assert.equal(lock.packages[""].name, manifest.name)
-  assert.equal(manifest.bin["kras-quick"], "bin/kras-quick.js")
-  assert.equal(text.match(/const VERSION = "([^"]+)"/)?.[1], manifest.version)
-  assert.match(text, /download\/v\$\{VERSION\}\/kras-quick\.exe/)
+  assert.equal(manifest.bin["kras-quick"], "bin/kras-quick.cjs")
+  assert.equal(lock.version, manifest.version)
+  assert.equal(lock.packages[""].version, manifest.version)
+  assert.match(text, /installExecutable\(join\(__dirname, 'kras-quick\.exe'\), downloads\)/)
+  const executable = fileURLToPath(new URL("../bin/kras-quick.exe", import.meta.url))
+  const result = spawnSync(executable, ["--version"], { encoding: "utf8" })
+  assert.equal(result.status, 0)
+  assert.equal(result.stdout.trim(), `kras-quick v${manifest.version}`)
   assert.doesNotMatch(text, /kras_quick_v/)
 })

@@ -19,6 +19,8 @@ use kras_quick::stage12::handle_captcha_loop;
 use kras_quick::workflow_watcher::{self, BuildingChoice, FloorChoice, WorkflowHooks};
 use std::io::{self, Write};
 
+mod restricted_access;
+
 const ENDPOINT: &str = "http://127.0.0.1:9333";
 
 use kras_quick::quick_address::lock_stdin_reader as lock_reader;
@@ -1340,6 +1342,10 @@ return JSON.stringify(out);
 				}
 			}
 			MenuAction::ToggleAuto => {
+				if !auto_mode && !restricted_access::request_access() {
+					println!("현재 요청을 진행할 수 없습니다.");
+					continue;
+				}
 				auto_mode = !auto_mode;
 				if auto_mode {
 					qa_mode = false;
@@ -1355,7 +1361,7 @@ return JSON.stringify(out);
 			}
 			MenuAction::EnterBatch => {
 				if !auto_mode {
-					println!("먼저 AUTO를 입력해 대규모 처리 모드를 켜 주세요.");
+					println!("현재 요청을 진행할 수 없습니다.");
 					continue;
 				}
 				if !collect_auto_batch(&mut pending_queue) { continue; }
@@ -1371,7 +1377,7 @@ return JSON.stringify(out);
 			}
 			MenuAction::StartBatch => {
 				if !auto_mode {
-					println!("먼저 AUTO를 입력해 대규모 처리 모드를 켜 주세요.");
+					println!("현재 요청을 진행할 수 없습니다.");
 					continue;
 				}
 				if pending_queue.is_empty() {
