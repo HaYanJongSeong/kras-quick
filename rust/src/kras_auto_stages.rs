@@ -203,15 +203,20 @@ pub fn run_kras_auto_stage3<S: KrasOzViewerSurface>(
 			page_xml,
 		};
 		let xml_data = parse_kras_xml(&capture.page_xml);
-		if !valid_capture(&capture) || !same_parcel_address(&xml_data.land_loc_nm, &stage2.address) {
+		let address_mismatch = !same_parcel_address(&xml_data.land_loc_nm, &stage2.address);
+		if !valid_capture(&capture) {
 			KrasAutoStage3Result::Blocked {
 				version: 1,
 				stage: 3,
 				status: "blocked".to_string(),
 				address: stage2.address.clone(),
-				reason: "document_mismatch".to_string(),
+				reason: "invalid_capture".to_string(),
 			}
 		} else {
+			if address_mismatch {
+				let addresses = serde_json::json!({"requestedAddress":stage2.address,"documentAddress":xml_data.land_loc_nm});
+				crate::task_screen::task_status(&format!("주소 불일치 기록 후 저장: {addresses}\n"));
+			}
 			drop(capture.page_pngs);
 			// saveKrasOutput equivalent: write files
 			let label = output_label(&KrasOutputTarget {
@@ -246,7 +251,10 @@ pub fn run_kras_auto_stage3<S: KrasOzViewerSurface>(
 			};
 			let page_png_artifacts: Vec<serde_json::Value> = Vec::new();
 			let mut integrity = serde_json::json!({
-				"version": 3,
+				"version": 4,
+				"requestedAddress": stage2.address,
+				"documentAddress": xml_data.land_loc_nm,
+				"addressMismatch": address_mismatch,
 				"building": { "value": stage2.building.value, "label": stage2.building.label },
 				"floorRoom": stage2.floor_room.as_ref().map(|f| serde_json::json!({"value": f.value, "label": f.label})),
 			});

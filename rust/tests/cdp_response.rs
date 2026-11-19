@@ -8,7 +8,19 @@ fn respond(reply: Value) -> Result<Value, Box<dyn std::error::Error>> {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
     let server = std::thread::spawn(move || {
-        let (stream, _) = listener.accept().unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let stream = loop {
+            match listener.accept() {
+                Ok((stream, _)) => break stream,
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    assert!(std::time::Instant::now() < deadline, "client never connected");
+                    std::thread::yield_now();
+                }
+                Err(error) => panic!("fixture accept failed: {error}"),
+            }
+        };
+        stream.set_nonblocking(false).unwrap();
         stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
         stream.set_write_timeout(Some(Duration::from_secs(5))).unwrap();
         let mut socket = tungstenite::accept(stream).unwrap();
@@ -52,4 +64,14 @@ fn successful_remote_value_is_unchanged() {
 fn protocol_error_still_propagates() {
     let error = respond(json!({"id":1,"error":{"code":-32601,"message":"METHOD_NOT_FOUND"}})).unwrap_err();
     assert!(error.to_string().contains("-32601"));
+}
+
+#[test]
+fn top_level_exception_still_propagates() {
+    // Given a legacy peer placing exceptionDetails outside result.
+    let reply = json!({"id":1,"exceptionDetails":{"exception":{"value":"LEGACY_FAILURE"}}});
+    // When the matching command response arrives.
+    let error = respond(reply).unwrap_err();
+    // Then the remote exception remains an error.
+    assert!(error.to_string().contains("LEGACY_FAILURE"));
 }

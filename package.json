@@ -1,12 +1,28 @@
 {
   "name": "kras-quick",
-  "version": "3.0.2",
+  "version": "3.0.3",
   "description": "KRAS Quick Windows launcher with Rust runtime",
-  "repository": { "type": "git", "url": "https://github.com/HaYanJongSeong/kras-quick.git" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HaYanJongSeong/kras-quick.git"
+  },
   "license": "MIT",
-  "os": ["win32"],
-  "cpu": ["x64"],
-  "bin": { "kras-quick": "bin/kras-quick.cjs" },
-  "files": ["bin/kras-quick.cjs", "bin/kras-quick.exe", "assets/kras-quick.png", "kras-quick.ico"],
-  "engines": { "node": ">=18" }
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "bin": {
+    "kras-quick": "bin/kras-quick.cjs"
+  },
+  "files": [
+    "bin/kras-quick.cjs",
+    "bin/kras-quick.exe",
+    "assets/kras-quick.png",
+    "kras-quick.ico"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
 }

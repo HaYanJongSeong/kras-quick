@@ -209,7 +209,7 @@ fn temp_root(tag: &str) -> PathBuf {
 }
 
 #[test]
-fn stale_document_is_blocked_without_creating_output() {
+fn different_document_address_is_saved_without_rewriting_original_data() {
 	let root = temp_root("stale-document");
 	let paths = property_auto_stage_paths(ADDRESS, Some(root.to_str().expect("root")));
 	std::fs::create_dir_all(&paths.other_directory).expect("stage 기록 폴더");
@@ -224,10 +224,64 @@ fn stale_document_is_blocked_without_creating_output() {
 		building: KrasBuildingOption { value: String::new(), label: String::new() },
 		floor_room: None,
 	};
-	let result = run_kras_auto_stage3(&stage2, &viewer, &paths).expect("차단 결과");
-	assert!(matches!(result, KrasAutoStage3Result::Blocked { reason, .. } if reason == "document_mismatch"));
-	assert!(!std::path::Path::new(&paths.pdf).exists());
+	let result = run_kras_auto_stage3(&stage2, &viewer, &paths).expect("저장 결과");
+	let output = match result {
+		KrasAutoStage3Result::Completed { output, .. } => output,
+		KrasAutoStage3Result::Blocked { reason, .. } => panic!("주소 차이만으로 차단되면 안 됨: {reason}"),
+	};
+	assert_eq!(std::fs::read(&output.pdf).unwrap(), viewer.pdf);
+	assert_eq!(std::fs::read_to_string(&output.page_xml).unwrap(), viewer.xml);
+	let data: serde_json::Value = serde_json::from_slice(&std::fs::read(&output.data_json).unwrap()).unwrap();
+	assert_eq!(data, kras_quick::full_xml_json::convert(&viewer.xml).unwrap());
+	assert!(output.pdf.contains(ADDRESS));
+	let record = kras_quick::output_log::latest(&output.structure_json, "output").unwrap();
+	assert_eq!(record["address"], "서울특별시 종로구 행촌동 210-730");
+	assert_eq!(record["_krasIntegrity"]["requestedAddress"], ADDRESS);
+	assert_eq!(record["_krasIntegrity"]["documentAddress"], "서울특별시 종로구 행촌동 210-730");
+	assert_eq!(record["_krasIntegrity"]["addressMismatch"], true);
+	let target = KrasOutputTarget { building: stage2.building.clone(), floor_room: None };
+	assert!(verify_kras_output(&paths.output_paths(), &output.structure_json, &target));
+	assert!(kras_quick::kras_output::is_kras_stage3_output_complete(&paths.output_paths(), &stage2.building, None));
+	assert!(run_kras_auto_stage3(&stage2, &viewer, &paths).is_err());
+	assert_eq!(std::fs::read_to_string(&output.page_xml).unwrap(), viewer.xml);
+	for field in ["requestedAddress", "documentAddress", "addressMismatch", "dataJson"] {
+		let mut damaged = record.clone();
+		damaged["_krasIntegrity"].as_object_mut().unwrap().remove(field);
+		kras_quick::output_log::append(&output.structure_json, "output", &damaged).unwrap();
+		assert!(!verify_kras_output(&paths.output_paths(), &output.structure_json, &target), "missing {field}");
+	}
+	for (field, value) in [("requestedAddress", serde_json::json!("other request")),
+		("documentAddress", serde_json::json!("other document")), ("addressMismatch", serde_json::json!(false)),
+		("version", serde_json::json!(3))] {
+		let mut damaged = record.clone();
+		damaged["_krasIntegrity"][field] = value;
+		kras_quick::output_log::append(&output.structure_json, "output", &damaged).unwrap();
+		assert!(!verify_kras_output(&paths.output_paths(), &output.structure_json, &target), "invalid {field}");
+	}
+	kras_quick::output_log::append(&output.structure_json, "output", &record).unwrap();
+	assert!(verify_kras_output(&paths.output_paths(), &output.structure_json, &target));
 	std::fs::remove_dir_all(root).expect("테스트 정리");
+}
+
+#[test]
+fn mismatch_permission_does_not_accept_corrupt_or_missing_capture_data() {
+	for invalid in ["pdf", "png", "xml"] {
+		let root = temp_root("invalid-mismatch");
+		let paths = property_auto_stage_paths(ADDRESS, Some(root.to_str().unwrap()));
+		let png = tiny_png();
+		let mut viewer = FakeViewer {
+			pdf: kras_quick::oz_capture::build_pdf_from_pngs(std::slice::from_ref(&png)).unwrap(), png,
+			xml: "<REAL_LAND_BLDG><LAND_LOC_NM>서울특별시 종로구 행촌동 210-730</LAND_LOC_NM></REAL_LAND_BLDG>".into(),
+		};
+		match invalid { "pdf" => viewer.pdf.clear(), "png" => viewer.png.clear(), "xml" => viewer.xml.clear(), _ => unreachable!() }
+		let stage2 = KrasAutoStage2Result { status: "completed".into(), address: ADDRESS.into(),
+			building: KrasBuildingOption { value: String::new(), label: String::new() }, floor_room: None };
+		let result = run_kras_auto_stage3(&stage2, &viewer, &paths).unwrap();
+		assert!(matches!(result, KrasAutoStage3Result::Blocked { reason, .. } if reason == "invalid_capture"));
+		assert!(!std::path::Path::new(&paths.pdf).exists());
+		assert!(!std::path::Path::new(&paths.page_xml).exists());
+		std::fs::remove_dir_all(root).unwrap();
+	}
 }
 
 #[test]
@@ -342,7 +396,7 @@ fn offline_pipeline_from_lookup_to_final_pdf() {
 
 	let structure_text = std::fs::read_to_string(&output.structure_json).expect("구조 JSON");
 	let structure = kras_quick::output_log::latest(&output.structure_json, "output").expect("통합 로그 산출물 정보");
-	assert_eq!(structure["_krasIntegrity"]["version"], 3);
+	assert_eq!(structure["_krasIntegrity"]["version"], 4);
 	let files: Vec<_> = std::fs::read_dir(&paths.other_directory).unwrap()
 		.map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned()).collect();
 	assert_eq!(files.len(), 3, "기타에는 XML·전체 JSON·통합 로그만 저장: {files:?}");
